@@ -1,8 +1,17 @@
 ---
-- name: Wait for first-boot cloud-init to finish (it holds the apt lock)
-  ansible.builtin.command: cloud-init status --wait
+- name: Wait for first-boot cloud-init to finish
+  ansible.builtin.command:
+    cmd: cloud-init status --wait
+  register: cloud_init_status
   changed_when: false
-  failed_when: false
+  failed_when: cloud_init_status.rc not in [0, 2]
+
+- name: Warn about recoverable cloud-init errors
+  ansible.builtin.debug:
+    msg: >-
+      cloud-init completed with recoverable errors on {{ inventory_hostname }};
+      continuing with Ansible configuration.
+  when: cloud_init_status.rc == 2
 
 - name: Install apt prerequisites
   ansible.builtin.apt:
