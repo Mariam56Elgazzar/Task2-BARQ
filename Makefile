@@ -14,3 +14,11 @@ ssh-app: ## SSH to the app host
 
 ssh-db: ## SSH to the database host
 	ssh -o StrictHostKeyChecking=no -i $$(terraform -chdir=terraform output -raw ssh_private_key_path) $$(terraform -chdir=terraform output -raw ssh_user)@$$(terraform -chdir=terraform output -raw db_public_ip)
+
+.PHONY: preflight idempotency
+
+preflight: ## Check tools, AWS credentials and SSH key
+	scripts/preflight.sh
+
+idempotency: ## After make up: plan and Ansible must change nothing
+	scripts/idempotency.sh
