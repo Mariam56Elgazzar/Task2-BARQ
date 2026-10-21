@@ -27,7 +27,7 @@ ansible-galaxy collection install -r requirements.yml
 VAULT_ARGS=()
 if [[ -f "$ROOT/.vault_pass" ]]; then
   VAULT_ARGS=(--vault-password-file "$ROOT/.vault_pass")
-elif [[ -f group_vars/all/vault.yml ]]; then
+elif [[ -f "$ANSIBLE_DIR/inventory/group_vars/all/vault.yml" ]]; then
   VAULT_ARGS=(--ask-vault-pass)
 fi
 
