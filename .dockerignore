@@ -1,0 +1,11 @@
+# Exclude everything unless explicitly allowed below.
+**
+
+# Allow Docker to access the application directory.
+!app/
+
+# Include only the files needed to package and run the API.
+!app/*.py
+!app/schema.sql
+!app/requirements.txt
+!app/Dockerfile

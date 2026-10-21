@@ -1,0 +1,81 @@
+name: notes-local
+
+services:
+  db:
+    image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: notes
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set the local database admin password}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?Set the local application database password}
+
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+      - type: bind
+        source: ./docker/postgres/init.sql
+        target: /docker-entrypoint-initdb.d/10-init.sql
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./app/schema.sql
+        target: /opt/notes/schema.sql
+        read_only: true
+        bind:
+          create_host_path: false
+
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "notes"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+  app:
+    image: notes-api:local
+    pull_policy: never
+    restart: unless-stopped
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: notes
+      DB_USER: notes_app
+      DB_PASSWORD: ${DB_APP_PASSWORD:?Set the local application database password}
+
+  nginx:
+    image: nginx:stable-bookworm@sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609
+    restart: unless-stopped
+
+    depends_on:
+      app:
+        condition: service_healthy
+
+    ports:
+      - "127.0.0.1:8080:80"
+
+    volumes:
+      - type: bind
+        source: ./docker/nginx/default.conf
+        target: /etc/nginx/conf.d/default.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "4", "http://127.0.0.1/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  pgdata:
