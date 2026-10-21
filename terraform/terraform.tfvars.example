@@ -2,3 +2,4 @@
 # region               = "eu-central-1"
 # admin_cidr           = "203.0.113.10/32"   # empty = detect current public IP
 # ssh_private_key_path = "~/.ssh/id_ed25519"
+#ubuntu_ami_id = "ami-REPLACE_WITH_REGION_SPECIFIC_AMI"

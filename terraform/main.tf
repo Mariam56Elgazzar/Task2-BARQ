@@ -3,21 +3,6 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"] # Canonical
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
 data "http" "my_ip" {
   url = "https://checkip.amazonaws.com"
 }
@@ -141,7 +126,7 @@ resource "aws_key_pair" "main" {
 
 ############ Instances ############
 resource "aws_instance" "app" {
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = var.ubuntu_ami_id
   instance_type          = var.app_instance_type
   subnet_id              = aws_subnet.public.id
   private_ip             = var.app_private_ip
@@ -162,13 +147,10 @@ resource "aws_instance" "app" {
   tags = { Name = "${var.project_name}-app" }
 
   # A newer Ubuntu AMI must not trigger replacement (keeps `terraform plan` clean).
-  lifecycle {
-    ignore_changes = [ami]
-  }
 }
 
 resource "aws_instance" "db" {
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = var.ubuntu_ami_id
   instance_type          = var.db_instance_type
   subnet_id              = aws_subnet.public.id
   private_ip             = var.db_private_ip
@@ -187,8 +169,4 @@ resource "aws_instance" "db" {
   }
 
   tags = { Name = "${var.project_name}-db" }
-
-  lifecycle {
-    ignore_changes = [ami]
-  }
 }

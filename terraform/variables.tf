@@ -70,3 +70,7 @@ variable "ssh_user" {
   type        = string
   default     = "ubuntu"
 }
+variable "ubuntu_ami_id" {
+  description = "Pinned Ubuntu 24.04 AMD64 AMI ID for the selected AWS region."
+  type        = string
+}
