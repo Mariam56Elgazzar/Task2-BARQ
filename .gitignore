@@ -16,6 +16,7 @@ id_ed25519
 .vault_pass*
 .env
 .env.*
+*.env
 !.env.example
 !**/.env.example
 .aws/
