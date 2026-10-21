@@ -1,0 +1,10 @@
+/terraform/ @Mariam56Elgazzar
+/scripts/   @Mariam56Elgazzar
+/Makefile   @Mariam56Elgazzar
+/ansible/roles/docker/ @Mariam56Elgazzar
+/ansible/roles/common/ @Mariam56Elgazzar
+
+/app/ @Amr-Kamoun
+/ansible/roles/postgres/ @Amr-Kamoun
+/ansible/roles/app_stack/ @Amr-Kamoun
+/ansible/roles/db_backup/ @Amr-Kamoun

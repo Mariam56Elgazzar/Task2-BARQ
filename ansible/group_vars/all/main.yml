@@ -1,0 +1,9 @@
+# Shared contract, see docs/contract.md.
+# db_private_ip / app_private_ip come from the generated inventory.
+db_host: "{{ db_private_ip }}"
+db_port: 5432
+db_name: notes
+db_app_user: notes_app
+backup_retention_days: 7
+# Secrets (vault_pg_admin_password, vault_pg_app_password) live in group_vars/all/vault.yml,
+# encrypted by Person B with ansible-vault.
