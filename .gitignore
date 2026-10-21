@@ -1,0 +1,35 @@
+# Terraform generated files and local configuration; commit .terraform.lock.hcl
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+
+# Credentials, private keys, Vault passwords, and rendered environments
+*.pem
+*.key
+id_rsa
+id_ed25519
+.vault_pass*
+.env
+.env.*
+!.env.example
+!**/.env.example
+.aws/
+
+# Generated inventory only; allow inventory/group_vars in Git
+/ansible/inventory/hosts.yml
+
+# Python caches and local verification output
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.retry
+/artifacts/
