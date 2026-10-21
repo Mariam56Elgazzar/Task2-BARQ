@@ -1,0 +1,30 @@
+---
+- name: Wait for SSH on all hosts
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Wait until the host accepts SSH connections
+      ansible.builtin.wait_for_connection:
+        delay: 5
+        timeout: 300
+
+- name: Install Docker on all hosts
+  hosts: all
+  become: true
+  roles:
+    - docker
+
+# --- Person B adds these plays (order matters: database first) ---
+# - hosts: db
+#   become: true
+#   roles: [postgres, db_backup]
+#
+# - hosts: app
+#   become: true
+#   pre_tasks:
+#     - name: DB reachable over the VPC from the app host
+#       ansible.builtin.wait_for:
+#         host: "{{ db_private_ip }}"
+#         port: "{{ db_port }}"
+#         timeout: 120
+#   roles: [app_stack]

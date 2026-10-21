@@ -1,0 +1,11 @@
+# Copy this file to terraform.tfvars and set the required ubuntu_ami_id before deployment.
+# terraform.tfvars is git-ignored.
+
+# region               = "eu-central-1"
+# admin_cidr           = "203.0.113.10/32"   # empty = detect the current public IP
+# ssh_private_key_path = "~/.ssh/id_ed25519"
+
+# Replace this with a verified Canonical Ubuntu 24.04 AMD64 AMI
+# that exists in the configured AWS region.
+ubuntu_ami_id = "ami-REPLACE_WITH_REGION_SPECIFIC_AMI"
+

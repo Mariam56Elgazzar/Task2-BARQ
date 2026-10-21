@@ -1,0 +1,75 @@
+---
+- name: Wait for first-boot cloud-init to finish
+  ansible.builtin.command:
+    cmd: cloud-init status --wait
+  register: cloud_init_status
+  changed_when: false
+  failed_when: cloud_init_status.rc not in [0, 2]
+
+- name: Warn about recoverable cloud-init errors
+  ansible.builtin.debug:
+    msg: >-
+      cloud-init completed with recoverable errors on {{ inventory_hostname }};
+      continuing with Ansible configuration.
+  when: cloud_init_status.rc == 2
+
+- name: Install apt prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - python3-debian   # required by deb822_repository
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create apt keyrings directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Add Docker's official GPG key
+  ansible.builtin.get_url:
+    url: "{{ docker_apt_key_url }}"
+    dest: "{{ docker_apt_key_path }}"
+    mode: "0644"
+
+- name: Add Docker apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/ubuntu
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: stable
+    architectures: "{{ docker_arch }}"
+    signed_by: "{{ docker_apt_key_path }}"
+    state: present
+  register: docker_repo
+
+- name: Refresh apt cache only when the repository was just added
+  ansible.builtin.apt:
+    update_cache: true
+  when: docker_repo.changed
+
+- name: Install Docker Engine and Compose plugin
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+
+- name: Add users to the docker group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_users }}"
+
+- name: Enable and start Docker and containerd on boot
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - docker
+    - containerd
