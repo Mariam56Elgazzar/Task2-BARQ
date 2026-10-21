@@ -146,7 +146,7 @@ resource "aws_instance" "app" {
 
   tags = { Name = "${var.project_name}-app" }
 
-  # A newer Ubuntu AMI must not trigger replacement (keeps `terraform plan` clean).
+  # The AMI stays pinned until ubuntu_ami_id changes; review instance replacement on upgrades.
 }
 
 resource "aws_instance" "db" {
