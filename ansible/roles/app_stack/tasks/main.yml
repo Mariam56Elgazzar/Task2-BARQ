@@ -1,0 +1,60 @@
+---
+- name: Validate the pinned application image reference
+  ansible.builtin.assert:
+    that:
+      - "'REPLACE_ME' not in app_image"
+      - app_image is match('^ghcr\.io/[^/]+/[^@]+@sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      Set app_image to the published GHCR image with its full sha256 digest
+      before deploying; the placeholder value is not deployable.
+
+- name: Create application stack directory
+  ansible.builtin.file:
+    path: "{{ app_stack_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render Nginx configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ app_stack_path }}/nginx.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Nginx container
+
+- name: Render application Compose project
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ app_stack_path }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Wait for PostgreSQL to accept connections
+  ansible.builtin.wait_for:
+    host: "{{ db_private_ip }}"
+    port: "{{ db_port }}"
+    timeout: 120
+
+- name: Deploy application Compose project
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_stack_path }}"
+    state: present
+
+- name: Run pending Nginx configuration handler
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify application readiness through Nginx
+  ansible.builtin.uri:
+    url: http://127.0.0.1/readyz
+    method: GET
+    status_code: 200
+  register: app_readiness
+  until: app_readiness.status == 200
+  retries: "{{ app_readiness_retries }}"
+  delay: "{{ app_readiness_delay }}"
+  changed_when: false

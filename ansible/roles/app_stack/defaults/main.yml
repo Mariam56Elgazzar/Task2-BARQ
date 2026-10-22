@@ -1,0 +1,18 @@
+---
+app_stack_path: /opt/stacks/app
+
+app_image: "ghcr.io/<owner>/<image>@sha256:REPLACE_ME"
+app_internal_port: 8000
+
+nginx_image: nginx:1.27-alpine
+
+app_health_path: /readyz
+app_health_interval: 10s
+app_health_timeout: 5s
+app_health_timeout_seconds: 4
+app_health_start_period: 20s
+app_health_retries: 3
+
+app_restart_policy: unless-stopped
+app_readiness_retries: 12
+app_readiness_delay: 5
