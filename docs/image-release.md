@@ -20,7 +20,9 @@ the release workflow before deployment can use it.
    loads and pushes the same image, without rebuilding it, using the workflow's
    short-lived `GITHUB_TOKEN` with `packages: write`.
 5. Publication creates the version tag and a full `sha-<commit>` tag. An existing
-   version is rejected. Deploy with the `@sha256:...` digest printed in the job
+   version is rejected; an inconclusive registry lookup also stops publication.
+   Only an explicit missing-manifest response permits publishing a new version.
+   Deploy with the `@sha256:...` digest printed in the job
    summary: registry tags are names, while a digest identifies exact content.
 6. A separate fresh runner pulls that digest with read-only package permission and
    verifies UID 10001. This proves authenticated pull access, not anonymous access
@@ -69,10 +71,14 @@ export DOCKER_CONFIG="$(mktemp -d)"
 docker pull ghcr.io/mariam56elgazzar/notes-api@sha256:REPLACE_WITH_RELEASE_DIGEST
 ```
 
-For private delivery, supply a read-only `read:packages` credential through Vault
-and use Ansible's `community.docker.docker_login` before deployment. Do not put
-registry tokens in Compose, Git, command arguments, or shared logs. This deployment
-credential integration belongs with the secrets/application roles.
+For private delivery, supply a read-only `read:packages` credential through Vault.
+The agreed application-role approach is `docker login ghcr.io --password-stdin`,
+invoked through `ansible.builtin.command` with the token supplied through `stdin`
+and `no_log: true`. Run login as the same host user that pulls the image, and protect
+its Docker credential configuration. This CLI approach does not require the Docker
+SDK for Python. Do not put registry tokens in Compose, Git, command arguments, or
+shared logs. This deployment credential integration belongs with the
+secrets/application roles; public pulls do not require it.
 
 Give the deployment owner the successful run URL, version, immutable digest,
 platform (`linux/amd64`), and proven pull method. The app still needs `DB_HOST`,
@@ -88,7 +94,8 @@ python scripts/verify-image.py notes-api:local
 ```
 
 Python 3.11+ and Docker are required. The script checks the running UID,
-authenticated readiness, restricted database role, real HTTP CRUD with an
+authenticated readiness, restricted database role (including an actual denied
+`CREATE TABLE public...` attempt), real HTTP CRUD with an
 independent SQL read, and absence of temporary build certificates/admin credentials
 in the app. It publishes no ports and removes only its uniquely named test
 containers/network. Its database uses temporary storage and is disposable.
