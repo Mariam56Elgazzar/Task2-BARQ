@@ -1,0 +1,13 @@
+[Unit]
+Description=Create a verified notes PostgreSQL backup
+Requires=docker.service
+After=docker.service
+RequiresMountsFor={{ backup_mount_path }}
+ConditionPathIsMountPoint={{ backup_mount_path }}
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart={{ backup_script_path }}

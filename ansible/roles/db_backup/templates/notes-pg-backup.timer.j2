@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily notes PostgreSQL backup at 02:30 UTC
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+Unit=notes-pg-backup.service
+
+[Install]
+WantedBy=timers.target

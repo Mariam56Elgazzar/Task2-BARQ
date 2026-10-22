@@ -1,0 +1,9 @@
+---
+- name: Take an explicit PostgreSQL backup
+  hosts: db
+  become: true
+  tasks:
+    - name: Create and verify a backup archive
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/notes-pg-backup]
+      no_log: true
