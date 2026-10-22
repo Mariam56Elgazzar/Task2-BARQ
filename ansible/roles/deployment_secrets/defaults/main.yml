@@ -1,2 +1,2 @@
 ---
-deployment_stack_root: /opt/stacks
+deployment_secrets_stack_root: /opt/stacks
