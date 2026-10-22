@@ -1,4 +1,4 @@
-FROM python:3.11.17-slim-trixie@sha256:cce12316475d7d56d605f76e1d811d0dc4e7227f2d4afd29951521264f504ff8
+FROM python:3.11.17-alpine3.24@sha256:03c8e956bf1eee7763faf3a9fbb24b3ff9c0496cc2dbc5bcb0d6ac1f6268a287
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -19,10 +19,8 @@ RUN --mount=type=secret,id=build_ca \
     python -m pip check; \
     rm -f /tmp/pip-ca.pem
 
-RUN groupadd --gid 10001 appuser \
-    && useradd --uid 10001 --gid appuser \
-       --no-create-home --no-log-init \
-       --shell /usr/sbin/nologin appuser
+RUN addgroup -g 10001 appuser \
+    && adduser -D -H -u 10001 -G appuser -s /sbin/nologin appuser
 
 COPY app/*.py app/schema.sql ./app/
 
