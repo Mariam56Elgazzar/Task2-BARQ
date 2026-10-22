@@ -58,8 +58,13 @@ Read the service journal for the failing command. Partial files are removed on
 failure; older completed backups remain. A successful `pg_restore --list`
 and checksum show the archive is readable and unchanged, but **only a real
 restore of deleted data proves recovery**. The second AWS Ansible run found a
-completed, checksum-valid archive. An AWS restore check has not yet been
-reported, so end-to-end recovery remains pending.
+completed, checksum-valid archive. The AWS operator later reported that
+`make verify-restore-isolated` passed on the deployed database. Its output was
+not supplied with this repository; this is a teammate-reported result. A
+separate before/after confirmation of a pre-existing live note was not supplied.
+The check demonstrates deleted-record recovery in a temporary database. A
+restore over the live `notes` database, including app stop and restart, remains
+untested.
 
 ## Check recovery without changing live notes
 
