@@ -20,11 +20,14 @@
   roles:
     - deployment_secrets
 
-# --- Person B adds these plays (order matters: database first) ---
-# - hosts: db
-#   become: true
-#   roles: [postgres, db_backup]
-#
+# Database runs after Docker and protected credentials, before the app.
+- name: Deploy PostgreSQL on the database host
+  hosts: db
+  become: true
+  roles:
+    - postgres
+
+# Person A enables the application play after integrating app_stack with .env.
 # - hosts: app
 #   become: true
 #   pre_tasks:

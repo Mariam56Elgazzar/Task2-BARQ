@@ -1,0 +1,381 @@
+---
+- name: Require the dedicated data volume and generated host addresses
+  ansible.builtin.assert:
+    that:
+      - pg_data_volume_id is defined
+      - db_private_ip is defined
+      - app_private_ip is defined
+    fail_msg: Terraform must attach the dedicated DB EBS volume and export its ID and the private host addresses.
+
+- name: Check the database deployment contract
+  ansible.builtin.assert:
+    that:
+      - pg_data_volume_id is match('^vol-[0-9a-f]{8,17}$')
+      - pg_stack_path == deployment_stack_root ~ '/db'
+      - pg_data_path is match('^' ~ pg_mount_path ~ '/[^/]+$')
+      - db_port | int == 5432
+    fail_msg: Database storage or Compose settings disagree with the shared deployment contract.
+
+- name: Install disk inspection and PostgreSQL client adapter
+  ansible.builtin.apt:
+    name:
+      - e2fsprogs
+      - python3-psycopg2
+      - util-linux
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the EBS inspection script directory
+  ansible.builtin.file:
+    path: /usr/local/libexec/notes
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install the EBS inspection script
+  ansible.builtin.copy:
+    src: identify_ebs.py
+    dest: /usr/local/libexec/notes/identify_ebs.py
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Resolve the attached volume by EBS serial rather than Linux disk number
+  ansible.builtin.command:
+    argv:
+      - /usr/local/libexec/notes/identify_ebs.py
+      - "{{ pg_data_volume_id }}"
+      - "{{ pg_mount_path }}"
+  register: pg_ebs_device_result
+  changed_when: false
+
+- name: Remember the verified data device
+  ansible.builtin.set_fact:
+    pg_ebs_device: "{{ pg_ebs_device_result.stdout }}"
+
+- name: Inspect the existing disk filesystem
+  ansible.builtin.command:
+    argv: [blkid, -o, value, -s, TYPE, "{{ pg_ebs_device }}"]
+  register: pg_fs_type
+  changed_when: false
+  failed_when: pg_fs_type.rc not in [0, 2]
+
+- name: Reject a disk with an unexpected existing filesystem
+  ansible.builtin.assert:
+    that: pg_fs_type.rc == 2 or pg_fs_type.stdout == 'ext4'
+    fail_msg: Existing EBS filesystem is not ext4; inspect it manually rather than formatting it.
+
+- name: Format only an empty data disk
+  community.general.filesystem:
+    dev: "{{ pg_ebs_device }}"
+    fstype: ext4
+    state: present
+    force: false
+  when: pg_fs_type.rc == 2
+
+- name: Read the persistent filesystem UUID
+  ansible.builtin.command:
+    argv: [blkid, -o, value, -s, UUID, "{{ pg_ebs_device }}"]
+  register: pg_fs_uuid
+  changed_when: false
+
+- name: Require a real filesystem UUID before adding the boot mount
+  ansible.builtin.assert:
+    that: pg_fs_uuid.stdout is match('^[0-9a-fA-F-]{36}$')
+    fail_msg: The selected EBS disk has no valid filesystem UUID.
+
+- name: Check whether the data mount path already exists
+  ansible.builtin.stat:
+    path: "{{ pg_mount_path }}"
+  register: pg_mount_dir_before
+
+- name: Check whether the data path is already a mount point
+  ansible.builtin.command:
+    argv: [mountpoint, --quiet, "{{ pg_mount_path }}"]
+  register: pg_was_mounted
+  changed_when: false
+  failed_when: pg_was_mounted.rc not in [0, 1]
+  when: pg_mount_dir_before.stat.exists
+
+- name: Inspect files hidden by a new mount
+  ansible.builtin.find:
+    paths: "{{ pg_mount_path }}"
+    hidden: true
+    recurse: false
+    file_type: any
+  register: pg_unmounted_path_contents
+  when: pg_mount_dir_before.stat.exists and pg_was_mounted.rc == 1
+
+- name: Refuse to hide existing root-disk files under the data mount
+  ansible.builtin.assert:
+    that: pg_unmounted_path_contents.matched == 0
+    fail_msg: The data mount path already contains files on the root disk; inspect them before mounting EBS.
+  when: pg_unmounted_path_contents is not skipped
+
+- name: Mount the verified data filesystem persistently
+  ansible.posix.mount:
+    path: "{{ pg_mount_path }}"
+    src: "UUID={{ pg_fs_uuid.stdout }}"
+    fstype: ext4
+    opts: defaults
+    state: mounted
+    dump: '0'
+    passno: '2'
+
+- name: Verify the exact mount is active
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, UUID, --mountpoint, "{{ pg_mount_path }}"]
+  register: pg_active_uuid
+  changed_when: false
+
+- name: Refuse database startup on the wrong filesystem
+  ansible.builtin.assert:
+    that: pg_active_uuid.stdout | trim == pg_fs_uuid.stdout | trim
+    fail_msg: The database data path is not mounted from the expected EBS filesystem.
+
+- name: Create PostgreSQL data directory on the mounted disk
+  ansible.builtin.file:
+    path: "{{ pg_data_path }}"
+    state: directory
+    owner: "{{ pg_container_uid }}"
+    group: "{{ pg_container_gid }}"
+    mode: '0700'
+
+- name: Make Docker require the data mount at boot
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Install Docker data-mount dependency
+  ansible.builtin.template:
+    src: docker-mount.conf.j2
+    dest: /etc/systemd/system/docker.service.d/require-pgdata.conf
+    owner: root
+    group: root
+    mode: '0644'
+  register: pg_docker_mount_unit
+
+- name: Reload systemd after changing Docker dependencies
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: pg_docker_mount_unit.changed
+
+- name: Create database Compose directory
+  ansible.builtin.file:
+    path: "{{ pg_stack_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: Create a local PostgreSQL socket directory
+  ansible.builtin.file:
+    path: "{{ pg_socket_path }}"
+    state: directory
+    owner: "{{ pg_container_uid }}"
+    group: "{{ pg_container_gid }}"
+    mode: '0770'
+
+- name: Verify protected database environment exists
+  ansible.builtin.stat:
+    path: "{{ pg_stack_path }}/.env"
+  register: pg_env_file
+
+- name: Refuse to deploy without protected credentials
+  ansible.builtin.assert:
+    that:
+      - pg_env_file.stat.exists
+      - pg_env_file.stat.pw_name == 'root'
+      - pg_env_file.stat.mode == '0600'
+    fail_msg: Run deployment_secrets first and keep the DB environment file root-owned with mode 0600.
+
+- name: Restrict database authentication to local administration and the app host
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: "{{ pg_stack_path }}/pg_hba.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  register: pg_hba_template
+
+- name: Render the database Compose project
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ pg_stack_path }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Confirm the data mount immediately before container creation
+  ansible.builtin.command:
+    argv: [findmnt, --noheadings, --output, UUID, --mountpoint, "{{ pg_mount_path }}"]
+  register: pg_prestart_uuid
+  changed_when: false
+  failed_when: pg_prestart_uuid.rc != 0 or pg_prestart_uuid.stdout | trim != pg_fs_uuid.stdout | trim
+
+- name: Deploy PostgreSQL without forced recreation
+  community.docker.docker_compose_v2:
+    project_src: "{{ pg_stack_path }}"
+    state: present
+
+- name: Wait for an authenticated local administrator connection
+  community.postgresql.postgresql_ping:
+    login_db: postgres
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+  register: pg_admin_ping
+  until: pg_admin_ping.is_available
+  retries: 30
+  delay: 3
+  changed_when: false
+  no_log: true
+
+- name: Reload PostgreSQL if its authentication rules changed
+  community.postgresql.postgresql_query:
+    login_db: postgres
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    query: SELECT pg_reload_conf()
+  when: pg_hba_template.changed
+  changed_when: false
+  no_log: true
+
+- name: Ensure the notes database exists
+  community.postgresql.postgresql_db:
+    name: "{{ db_name }}"
+    login_db: postgres
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    state: present
+  no_log: true
+
+- name: Ensure a restricted application account exists
+  community.postgresql.postgresql_user:
+    name: "{{ db_app_user }}"
+    password: "{{ vault_pg_app_password }}"
+    role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOREPLICATION
+    login_db: postgres
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    state: present
+  no_log: true
+
+- name: Remove default public database access
+  community.postgresql.postgresql_privs:
+    login_db: postgres
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    type: database
+    objs: "{{ db_name }}"
+    roles: PUBLIC
+    privs: ALL
+    state: absent
+  no_log: true
+
+- name: Give the app only database connection permission
+  community.postgresql.postgresql_privs:
+    login_db: postgres
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    type: database
+    objs: "{{ db_name }}"
+    roles: "{{ db_app_user }}"
+    privs: CONNECT
+    state: present
+  no_log: true
+
+- name: Remove default public schema access
+  community.postgresql.postgresql_privs:
+    login_db: "{{ db_name }}"
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    type: schema
+    objs: public
+    roles: PUBLIC
+    privs: ALL
+    state: absent
+  no_log: true
+
+- name: Allow the app to use the public schema
+  community.postgresql.postgresql_privs:
+    login_db: "{{ db_name }}"
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    type: schema
+    objs: public
+    roles: "{{ db_app_user }}"
+    privs: USAGE
+    state: present
+  no_log: true
+
+- name: Check whether the notes table already exists
+  community.postgresql.postgresql_query:
+    login_db: "{{ db_name }}"
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    query: SELECT to_regclass('public.notes') IS NOT NULL AS is_present
+  register: pg_notes_table
+  changed_when: false
+  no_log: true
+
+- name: Create the application table only when absent
+  community.postgresql.postgresql_query:
+    login_db: "{{ db_name }}"
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    query: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../app/schema.sql') }}"
+  when: not pg_notes_table.query_result[0].is_present
+  no_log: true
+
+- name: Grant the app only table read and write permissions
+  community.postgresql.postgresql_privs:
+    login_db: "{{ db_name }}"
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    type: table
+    schema: public
+    objs: notes
+    roles: "{{ db_app_user }}"
+    privs: SELECT,INSERT,UPDATE,DELETE
+    state: present
+  no_log: true
+
+- name: Allow the app to generate note identifiers
+  community.postgresql.postgresql_privs:
+    login_db: "{{ db_name }}"
+    login_user: postgres
+    login_password: "{{ vault_pg_admin_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    type: sequence
+    schema: public
+    objs: notes_id_seq
+    roles: "{{ db_app_user }}"
+    privs: USAGE
+    state: present
+  no_log: true
+
+- name: Prove the app account can authenticate and read the expected table
+  community.postgresql.postgresql_query:
+    login_db: "{{ db_name }}"
+    login_user: "{{ db_app_user }}"
+    login_password: "{{ vault_pg_app_password }}"
+    login_unix_socket: "{{ pg_socket_path }}"
+    query: SELECT id, title, content, created_at FROM public.notes LIMIT 0
+  changed_when: false
+  no_log: true
