@@ -31,12 +31,12 @@ to the publishing job on version-tag pushes. Third-party Actions are pinned to
 reviewed commit hashes. No personal access token or database secret is required
 in repository secrets for the workflow. Test passwords are generated per run.
 
-The image uses Python 3.11.17 on digest-pinned Debian 13 (Trixie). The first scan
-identified vulnerable Debian 12 libraries and old packages vendored in setuptools.
-The newer base supplies updated system libraries; setuptools/wheel are removed
-after dependency installation because the API does not need build tools at runtime.
-`pip check` and the packaged-image test verify the remaining dependencies work.
-The vulnerability threshold remains unchanged; each build must pass a fresh scan.
+The image uses Python 3.11.17 on digest-pinned Alpine 3.24, with a smaller set of
+system packages. Setuptools/wheel are removed after dependency installation because
+the API does not need build tools at runtime. Alpine uses musl rather than glibc;
+the pinned binary Python dependencies must provide compatible wheels. `pip check`
+and the real packaged-image/database test verify compatibility. The high/critical
+vulnerability threshold remains unchanged; each build must pass a fresh scan.
 
 ## First release
 
