@@ -12,7 +12,7 @@ tests, see [app/README.md](app/README.md).
 - [API endpoints, configuration, schema, and tests](app/README.md)
 - [Deployment credentials and protected environment files](docs/deployment-secrets.md)
 - [PostgreSQL storage, deployment, and checks](docs/postgres-deployment.md)
-- [Daily PostgreSQL backups and checks](docs/backups.md)
+- [Daily PostgreSQL backups and explicit restoration](docs/backups.md)
 - [Image release workflow, registry access, and troubleshooting](docs/image-release.md)
 
 **Deployment status:** The PostgreSQL deployment and guarded backup roles are
@@ -21,9 +21,11 @@ integrated into the normal deployment playbook. The deployment order is
 check for PostgreSQL from the application host, and then `app_stack`. The
 application stack is not deployed until that readiness check succeeds.
 
-The local tests and static validation pass. No real AWS deployment or EBS mount
-test has been performed; reboot persistence has not been tested; no real backup
-has been executed on AWS; and no restore demonstration has been completed.
+Static validation and an isolated local PostgreSQL restore test pass. An
+explicit restore playbook and deleted-note demo are available. No real AWS
+deployment or EBS mount test has been performed; reboot persistence has not
+been tested; no real backup has
+been executed on AWS; and no restore demonstration has been completed.
 End-to-end recovery remains pending. Do not treat any of these AWS behaviors
 as proven by local checks.
 
@@ -119,6 +121,10 @@ as proven by local checks.
    This runs `terraform destroy`. Confirm in AWS that the project resources
    were removed; do not assume cleanup succeeded just because the command
    returned.
+
+For an explicit backup and a measured deleted-note recovery demonstration,
+see [docs/backups.md](docs/backups.md). Restoring rewinds the whole database;
+run the demo only after coordinating with the deployment operator.
 
 ## Why the application image is pinned by digest
 

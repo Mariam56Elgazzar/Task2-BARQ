@@ -26,6 +26,16 @@ cd ansible
 ansible-playbook playbooks/backup-now.yml --vault-password-file ../.vault_pass
 ```
 
+From the repository root, the same operation is:
+
+```bash
+make backup
+```
+
+The explicit backup play prints a `BACKUP_ARCHIVE=notes-...dump` basename. Save
+that name if you need to choose this archive for recovery; it contains no
+password. Do not copy the database `.env` or decrypted Vault contents.
+
 On the database host, inspect schedule and result without printing credentials:
 
 ```bash
@@ -50,3 +60,49 @@ and checksum show the archive is readable and unchanged, but **only a real
 restore of deleted data proves recovery**. No real backup execution on AWS or
 restore demonstration has been performed. End-to-end recovery remains pending;
 local tests and static validation do not prove AWS backup or restore behavior.
+
+## Explicit recovery
+
+Restore rewinds the **entire notes database** to the selected backup. Notes
+created or edited afterward will be lost, and notes deleted afterward will
+return. Coordinate with the operator and users before running it. Normal
+`make up` never invokes `restore.yml`.
+
+After inventory and Vault access are ready, choose the basename of a completed
+archive on the DB host and run from the controller:
+
+```bash
+cd ansible
+ansible-playbook playbooks/restore.yml \
+  --vault-password-file ../.vault_pass \
+  -e restore_backup_file=notes-YYYYMMDDTHHMMSSNNNNNNNNNZ.dump
+```
+
+The playbook accepts a basename, not an arbitrary path. It verifies the
+checksum, archive catalog, and data mount before touching the app. It stops
+the app and Nginx to block writes, takes the backup job's lock, and restores
+the archive in a single PostgreSQL transaction. The archive itself is never
+modified. Since dumps exclude ownership and grants, Ansible reapplies the
+restricted app user's schema, table, and sequence permissions. It then starts
+the app and requires `/readyz` through Nginx. On failure it attempts to bring
+the app back and reports the failure; inspect the failed task and database
+state before retrying. A checksum check alone cannot prove data recovery.
+
+For a live proof with a disposable marker note:
+
+```bash
+RESTORE_CONFIRM=I_UNDERSTAND make restore-demo
+```
+
+The script creates a unique note through Nginx, takes a new backup, deletes
+the note, requires HTTP 404, restores that backup, and requires the **same ID
+and content** to return with HTTP 200. It prints the measured elapsed seconds
+and removes its marker after success. If a step fails, it leaves the marker
+and archive for inspection rather than claiming recovery. Run this when other
+users are not writing; it still rewinds all changes made after its backup.
+
+Troubleshooting order: check that the selected `.dump` and `.sha256` pair are
+present under `/var/backups/postgres`, then the checksum, `/srv/pgdata` mount,
+healthy DB container, app grants, and `/readyz`. The backup and restore helper
+share a lock; retry after a scheduled backup finishes. Do not print protected
+environment files or decrypted Vault data while diagnosing a failure.
