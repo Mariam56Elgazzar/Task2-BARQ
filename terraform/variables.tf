@@ -74,3 +74,25 @@ variable "ubuntu_ami_id" {
   description = "Pinned Ubuntu 24.04 AMD64 AMI ID for the selected AWS region."
   type        = string
 }
+
+variable "db_data_volume_size" {
+  description = "Dedicated PostgreSQL data EBS volume size in GiB."
+  type        = number
+  default     = 20
+
+  validation {
+    condition     = var.db_data_volume_size >= 10
+    error_message = "db_data_volume_size must be at least 10 GiB."
+  }
+}
+
+variable "db_data_volume_type" {
+  description = "EBS volume type for PostgreSQL data."
+  type        = string
+  default     = "gp3"
+
+  validation {
+    condition     = contains(["gp3", "gp2"], var.db_data_volume_type)
+    error_message = "db_data_volume_type must be gp3 or gp2."
+  }
+}

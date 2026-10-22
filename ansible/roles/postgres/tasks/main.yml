@@ -11,7 +11,7 @@
   ansible.builtin.assert:
     that:
       - pg_data_volume_id is match('^vol-[0-9a-f]{8,17}$')
-      - pg_stack_path == deployment_stack_root ~ '/db'
+      - pg_stack_path == '/opt/stacks/db'
       - pg_data_path is match('^' ~ pg_mount_path ~ '/[^/]+$')
       - db_port | int == 5432
     fail_msg: Database storage or Compose settings disagree with the shared deployment contract.

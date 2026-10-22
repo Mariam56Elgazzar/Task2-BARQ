@@ -20,20 +20,25 @@
   roles:
     - deployment_secrets
 
-# Database runs after Docker and protected credentials, before the app.
-- name: Deploy PostgreSQL on the database host
+- name: Deploy PostgreSQL and backups
   hosts: db
   become: true
   roles:
     - postgres
+    - db_backup
 
-# Person A enables the application play after integrating app_stack with .env.
-# - hosts: app
-#   become: true
-#   pre_tasks:
-#     - name: DB reachable over the VPC from the app host
-#       ansible.builtin.wait_for:
-#         host: "{{ db_private_ip }}"
-#         port: "{{ db_port }}"
-#         timeout: 120
-#   roles: [app_stack]
+- name: Wait for PostgreSQL from application host
+  hosts: app
+  become: true
+  tasks:
+    - name: Wait for PostgreSQL private listener
+      ansible.builtin.wait_for:
+        host: "{{ db_private_ip }}"
+        port: "{{ db_port }}"
+        timeout: 120
+
+- name: Deploy application stack
+  hosts: app
+  become: true
+  roles:
+    - app_stack

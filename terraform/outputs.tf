@@ -35,7 +35,12 @@ output "ansible_inventory" {
     app_private_ip       = aws_instance.app.private_ip
     db_public_ip         = aws_instance.db.public_ip
     db_private_ip        = aws_instance.db.private_ip
+    pg_data_volume_id    = aws_ebs_volume.db_data.id
     ssh_user             = var.ssh_user
     ssh_private_key_path = pathexpand(var.ssh_private_key_path)
   })
+}
+output "pg_data_volume_id" {
+  description = "Dedicated EBS volume ID attached to the database instance."
+  value       = aws_ebs_volume.db_data.id
 }

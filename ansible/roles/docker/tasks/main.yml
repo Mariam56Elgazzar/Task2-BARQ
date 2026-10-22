@@ -2,16 +2,16 @@
 - name: Wait for first-boot cloud-init to finish
   ansible.builtin.command:
     cmd: cloud-init status --wait
-  register: cloud_init_status
+  register: docker_cloud_init_status
   changed_when: false
-  failed_when: cloud_init_status.rc not in [0, 2]
+  failed_when: docker_cloud_init_status.rc not in [0, 2]
 
 - name: Warn about recoverable cloud-init errors
   ansible.builtin.debug:
     msg: >-
       cloud-init completed with recoverable errors on {{ inventory_hostname }};
       continuing with Ansible configuration.
-  when: cloud_init_status.rc == 2
+  when: docker_cloud_init_status.rc == 2
 
 - name: Install apt prerequisites
   ansible.builtin.apt:
@@ -46,12 +46,10 @@
     architectures: "{{ docker_arch }}"
     signed_by: "{{ docker_apt_key_path }}"
     state: present
-  register: docker_repo
+  notify: Refresh Docker APT cache
 
-- name: Refresh apt cache only when the repository was just added
-  ansible.builtin.apt:
-    update_cache: true
-  when: docker_repo.changed
+- name: Apply pending apt cache refresh before installing Docker
+  ansible.builtin.meta: flush_handlers
 
 - name: Install Docker Engine and Compose plugin
   ansible.builtin.apt:

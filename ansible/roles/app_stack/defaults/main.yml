@@ -1,0 +1,18 @@
+---
+app_stack_path: /opt/stacks/app
+
+app_stack_image: "ghcr.io/mariam56elgazzar/notes-api@sha256:147da9f7ef283476aba1e62fc32cc682a78dcc919a3198e05ea0ab7775bbb24b"
+app_stack_internal_port: 8000
+
+app_stack_nginx_image: nginx:1.27-alpine
+
+app_stack_health_path: /readyz
+app_stack_health_interval: 10s
+app_stack_health_timeout: 5s
+app_stack_health_timeout_seconds: 4
+app_stack_health_start_period: 20s
+app_stack_health_retries: 3
+
+app_stack_restart_policy: unless-stopped
+app_stack_readiness_retries: 12
+app_stack_readiness_delay: 5

@@ -3,9 +3,9 @@
 The `postgres` Ansible role runs on the database EC2 host after Docker and
 `deployment_secrets`. It expects Terraform's generated inventory to contain
 `pg_data_volume_id`, the ID of a **separate attached EBS data volume**, plus
-`db_private_ip` and `app_private_ip`. The current Terraform configuration must
-gain that volume and output before this role can run on AWS. Do not guess a
-`/dev/nvme...` name or use the root disk as a substitute.
+`db_private_ip` and `app_private_ip`. Terraform provisions and attaches the
+encrypted data volume, and includes its ID in the generated inventory. Do not
+guess a `/dev/nvme...` name or use the root disk as a substitute.
 
 The role matches the EBS volume ID to its NVMe serial, rejects missing,
 ambiguous, partitioned, or unexpectedly mounted disks, and formats only a
@@ -28,8 +28,8 @@ recreation.
 
 ## Verification on the actual hosts
 
-After the data-volume output and Vault password are available, run the
-documented deployment. Check the following without displaying secrets:
+After the Vault password and the deployment prerequisites are available, run
+the documented deployment. Check the following without displaying secrets:
 
 ```bash
 sudo findmnt --mountpoint /srv/pgdata -o SOURCE,UUID,TARGET
@@ -40,10 +40,17 @@ sudo ss -ltn '( sport = :5432 )'
 ```
 
 The listener must use the DB private IP, never `0.0.0.0` or its public IP.
-From the app host, check an authenticated API create/read through Nginx once
-`app_stack` is integrated. Check a second Ansible run for zero unnecessary
-changes, then recreate the DB container and reboot both hosts while asserting
-the same record still exists. Those AWS checks have not yet been run.
+The active site playbook deploys `postgres`, runs `db_backup`, waits for the
+PostgreSQL TCP listener from the app host, and then deploys `app_stack`. From
+the app host, an authenticated API create/read through Nginx can be checked
+after deployment. A second Ansible run should have zero unnecessary changes;
+then recreate the DB container and reboot both hosts while asserting the same
+record still exists.
+
+Local tests and static validation pass. No real AWS deployment, EBS mount test,
+or reboot persistence test has been performed. No real backup execution on AWS
+or restore demonstration has been completed; end-to-end recovery remains
+pending.
 
 ## Troubleshooting
 
@@ -57,6 +64,7 @@ container logs on the DB host. For a failed app connection, check the private
 listener, security group, `pg_hba.conf`, then the role and database grants.
 Do not print `.env`, decrypted Vault, or unredacted Compose configuration.
 
-The local Ansible checks validate syntax and disk identification logic.
-They do not prove AWS storage, network isolation, reboot behavior, or data
-persistence. Backups and restoration are separate upcoming roles.
+The local Ansible checks validate syntax and disk identification logic. They
+do not prove AWS storage, network isolation, reboot behavior, or data
+persistence. The backup role is integrated and documented separately, but AWS
+backup execution, restore, and end-to-end recovery remain unverified.
