@@ -79,10 +79,11 @@ ansible-playbook playbooks/restore.yml \
 ```
 
 The playbook accepts a basename, not an arbitrary path. It verifies the
-checksum, archive catalog, and data mount before touching the app. It stops
-the app and Nginx to block writes, takes the backup job's lock, and restores
-the archive in a single PostgreSQL transaction. The archive itself is never
-modified. Since dumps exclude ownership and grants, Ansible reapplies the
+checksum, archive catalog, and data mount before touching the app. It requires
+the app Compose project to exist, but can proceed if `/readyz` is already down.
+It stops the app and Nginx to block writes, takes the backup job's lock, and
+restores the archive in a single PostgreSQL transaction. The archive itself is
+never modified. Since dumps exclude ownership and grants, Ansible reapplies the
 restricted app user's schema, table, and sequence permissions. It then starts
 the app and requires `/readyz` through Nginx. On failure it attempts to bring
 the app back and reports the failure; inspect the failed task and database

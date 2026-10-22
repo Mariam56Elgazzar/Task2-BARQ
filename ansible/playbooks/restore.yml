@@ -33,12 +33,16 @@
         argv: ["{{ restore_script }}", --verify, "{{ restore_backup_file }}"]
       changed_when: false
 
-    - name: Require a healthy app before beginning the restore
-      ansible.builtin.uri:
-        url: http://127.0.0.1/readyz
-        status_code: 200
+    - name: Check the application Compose project before beginning the restore
+      ansible.builtin.stat:
+        path: "{{ restore_app_stack }}/docker-compose.yml"
+      register: restore_app_project
       delegate_to: "{{ groups['app'][0] }}"
-      changed_when: false
+
+    - name: Require the application Compose project before stopping writes
+      ansible.builtin.assert:
+        that: restore_app_project.stat.isreg | default(false)
+        fail_msg: Deploy the application stack before restoring its database.
 
     - name: Stop writes, restore, repair grants, and recover the app
       block:
