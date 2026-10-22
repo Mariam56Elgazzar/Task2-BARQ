@@ -25,7 +25,7 @@ remove_test_note() {
   local delete_status
   if [[ -n "$test_note_id" ]]; then
     if delete_status="$(curl -sS --max-time 15 -o "$response_file" -w '%{http_code}' \
-      -X DELETE "$base_url/api/notes/$test_note_id") &&
+      -X DELETE "$base_url/api/notes/$test_note_id")" &&
       [[ "$delete_status" == "204" ]]; then
       printf '%s\n' 'PASS removed temporary verification note'
     else
@@ -44,7 +44,7 @@ else
   failures=$((failures + 1))
 fi
 
-payload="$(printf '{"title":"%s","content":"%s"}' "$test_title" "$test_content")"
+payload="$(printf '{\"title\":\"%s\",\"content\":\"%s\"}' "$test_title" "$test_content")"
 if post_status="$(curl -sS --max-time 15 -o "$response_file" -w '%{http_code}' \
   -H 'Content-Type: application/json' \
   --data-binary "$payload" "$base_url/api/notes")" &&
