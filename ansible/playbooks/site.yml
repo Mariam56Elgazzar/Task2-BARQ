@@ -14,6 +14,12 @@
   roles:
     - docker
 
+- name: Render protected stack environments
+  hosts: app:db
+  become: true
+  roles:
+    - deployment_secrets
+
 # --- Person B adds these plays (order matters: database first) ---
 # - hosts: db
 #   become: true

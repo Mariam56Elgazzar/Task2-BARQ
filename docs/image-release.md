@@ -21,7 +21,9 @@ the release workflow before deployment can use it.
    short-lived `GITHUB_TOKEN` with `packages: write`.
 5. Publication creates the version tag and a full `sha-<commit>` tag. An existing
    version is rejected; an inconclusive registry lookup also stops publication.
-   Only an explicit missing-manifest response permits publishing a new version.
+   Before the first package exists, GHCR may answer a tag lookup with `denied`.
+   In that case the workflow requires a matching GitHub Packages 404 before it
+   permits publication; other API responses stop the release.
    Deploy with the `@sha256:...` digest printed in the job
    summary: registry tags are names, while a digest identifies exact content.
 6. A separate fresh runner pulls that digest with read-only package permission and
