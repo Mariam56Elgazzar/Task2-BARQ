@@ -1,0 +1,7 @@
+# Managed by Ansible. The app host is the only remote database client.
+local all postgres scram-sha-256
+local {{ db_name }} {{ db_app_user }} scram-sha-256
+local all all reject
+host {{ db_name }} {{ db_app_user }} {{ app_private_ip }}/32 scram-sha-256
+host all all 0.0.0.0/0 reject
+host all all ::/0 reject

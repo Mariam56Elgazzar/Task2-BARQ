@@ -1,0 +1,39 @@
+---
+services:
+  db:
+    image: "{{ pg_image }}"
+    restart: "{{ pg_restart_policy }}"
+    env_file: .env
+    command:
+      - postgres
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - listen_addresses=*
+    ports:
+      - "{{ db_private_ip }}:{{ db_port }}:5432"
+    volumes:
+      - type: bind
+        source: "{{ pg_data_path }}"
+        target: /var/lib/postgresql/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "{{ pg_socket_path }}"
+        target: /var/run/postgresql
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "{{ pg_stack_path }}/pg_hba.conf"
+        target: /etc/postgresql/pg_hba.conf
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "/var/run/postgresql", "-U", "postgres", "-d", "{{ db_name }}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s

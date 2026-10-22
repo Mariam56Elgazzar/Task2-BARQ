@@ -1,0 +1,9 @@
+---
+pg_stack_path: /opt/stacks/db
+pg_mount_path: /srv/pgdata
+pg_data_path: /srv/pgdata/data
+pg_socket_path: /opt/stacks/db/run
+pg_image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+pg_container_uid: '999'
+pg_container_gid: '999'
+pg_restart_policy: unless-stopped
