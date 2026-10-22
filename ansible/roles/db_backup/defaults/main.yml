@@ -1,0 +1,7 @@
+---
+backup_directory: /var/backups/postgres
+backup_stack_path: /opt/stacks/db
+backup_mount_path: /srv/pgdata
+backup_script_path: /usr/local/sbin/notes-pg-backup
+backup_docker_bin: /usr/bin/docker
+backup_retention_days: 7
