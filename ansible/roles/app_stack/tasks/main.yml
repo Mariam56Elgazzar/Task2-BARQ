@@ -14,7 +14,19 @@
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: "0750"
+
+- name: Confirm the protected environment file exists
+  ansible.builtin.stat:
+    path: "{{ app_stack_path }}/.env"
+  register: app_stack_env_file
+
+- name: Require the deployment_secrets role to have run
+  ansible.builtin.assert:
+    that: app_stack_env_file.stat.exists
+    fail_msg: >-
+      {{ app_stack_path }}/.env is missing. Run the deployment_secrets role first
+      (do not use --limit or --tags that skip it).
 
 - name: Render Nginx configuration
   ansible.builtin.template:
@@ -31,12 +43,11 @@
     dest: "{{ app_stack_path }}/docker-compose.yml"
     owner: root
     group: root
-    mode: "0600"
-  no_log: true
+    mode: "0644"
 
 - name: Wait for PostgreSQL to accept connections
   ansible.builtin.wait_for:
-    host: "{{ db_private_ip }}"
+    host: "{{ db_host }}"
     port: "{{ db_port }}"
     timeout: 120
 
