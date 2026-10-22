@@ -250,7 +250,7 @@
 - name: Ensure the notes database exists
   community.postgresql.postgresql_db:
     name: "{{ db_name }}"
-    login_db: postgres
+    maintenance_db: postgres
     login_user: postgres
     login_password: "{{ vault_pg_admin_password }}"
     login_unix_socket: "{{ pg_socket_path }}"
