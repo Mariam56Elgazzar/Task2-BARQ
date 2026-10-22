@@ -48,6 +48,9 @@
     state: present
   notify: Refresh Docker APT cache
 
+- name: Apply pending apt cache refresh before installing Docker
+  ansible.builtin.meta: flush_handlers
+
 - name: Install Docker Engine and Compose plugin
   ansible.builtin.apt:
     name: "{{ docker_packages }}"
