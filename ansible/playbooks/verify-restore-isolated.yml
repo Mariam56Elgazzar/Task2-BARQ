@@ -1,0 +1,50 @@
+---
+# Checks a real backup without restoring over the live notes database.
+- name: Prove PostgreSQL recovery in a temporary database
+  hosts: db
+  become: true
+  gather_facts: false
+  vars:
+    isolated_backup_dir: /var/backups/postgres
+    isolated_stack_path: /opt/stacks/db
+    isolated_mount_path: /srv/pgdata
+    isolated_docker_bin: /usr/bin/docker
+    isolated_check_script: /usr/local/sbin/notes-pg-verify-restore-isolated
+  tasks:
+    - name: Require one selected backup filename
+      ansible.builtin.assert:
+        that: restore_backup_file | default('') is match('^notes-[0-9]{8}T[0-9]{15}Z\\.dump$')
+        fail_msg: Pass -e restore_backup_file=notes-YYYYMMDDTHHMMSSNNNNNNNNNZ.dump.
+
+    - name: Install the protected isolated recovery check
+      ansible.builtin.template:
+        src: templates/notes-pg-verify-restore-isolated.j2
+        dest: "{{ isolated_check_script }}"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Check recovery and report a safe failure hint
+      block:
+        - name: Restore into a temporary database and recover a deleted marker
+          ansible.builtin.command:
+            argv: ["{{ isolated_check_script }}", "{{ restore_backup_file }}"]
+          no_log: true
+      rescue:
+        - name: Explain how to investigate a failed isolated check
+          ansible.builtin.fail:
+            msg: >-
+              Isolated recovery check failed. The helper attempted to remove
+              its temporary database and archive. On the DB host, inspect free
+              space, /srv/pgdata, the PostgreSQL container, and temporary
+              databases named notes_restore_check_*. Leave the live notes
+              database untouched. The selected source archive was not restored
+              over it.
+
+    - name: Report the safe recovery result
+      ansible.builtin.debug:
+        msg: >-
+          PASS: {{ restore_backup_file }} restored into a temporary database;
+          a deleted marker returned with the same ID and content; the temporary
+          database and test archive were removed. The live notes database was
+          not the restore target.

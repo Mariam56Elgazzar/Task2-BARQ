@@ -58,8 +58,41 @@ Read the service journal for the failing command. Partial files are removed on
 failure; older completed backups remain. A successful `pg_restore --list`
 and checksum show the archive is readable and unchanged, but **only a real
 restore of deleted data proves recovery**. The second AWS Ansible run found a
-completed, checksum-valid archive. A live deleted-note restore has not yet been
-demonstrated, so end-to-end recovery remains pending.
+completed, checksum-valid archive. An AWS restore check has not yet been
+reported, so end-to-end recovery remains pending.
+
+## Check recovery without changing live notes
+
+Run this from the deployment operator's checkout, with the generated inventory
+and Vault password available:
+
+```bash
+make verify-restore-isolated
+```
+
+This takes a fresh backup of the live `notes` database, verifies its checksum,
+and restores it into a uniquely named **temporary database on the existing DB
+host**. It adds a marker only to that temporary database, backs it up, deletes
+the marker, restores the temporary backup, and checks that the same ID and
+content return. It then drops the temporary database and removes the temporary
+archive. It never uses the live `notes` database as a restore target or stops
+the app. The new source backup remains under the normal seven-day retention
+policy, which may remove older archives. The test briefly uses additional DB
+and backup disk space; leave enough free space for both copies. It holds the
+backup lock throughout, so a scheduled backup cannot run at the same time.
+
+If the check fails, it attempts to remove its temporary database and archive.
+Check disk space, the data mount, database container, and selected archive.
+Ansible hides the helper's output because it handles a copy of the data. If
+cleanup also fails, ask the DB operator to
+inspect temporary databases named `notes_restore_check_...` and remove only
+the one from this failed check. The live `notes` database should be left alone.
+
+A passing isolated check proves that a real backup can be restored and a
+deleted record recovered on the deployed PostgreSQL server. It does not prove
+that the live app can be stopped and resumed after rewinding its own database;
+that separate, disruptive demonstration needs a disposable database or an
+approved maintenance window.
 
 ## Explicit recovery
 

@@ -1,4 +1,4 @@
-.PHONY: help up down ssh-app ssh-db backup restore-demo verify-security verify-app verify-idempotency verify
+.PHONY: help up down ssh-app ssh-db backup restore-demo verify-restore-isolated verify-security verify-app verify-idempotency verify
 
 help: ## List targets
 	@grep -E "^[a-z-]+:.*##" $(MAKEFILE_LIST) | sed "s/:.*## /: /"
@@ -20,6 +20,9 @@ backup: ## Take an explicit PostgreSQL backup
 
 restore-demo: ## Prove insert, backup, delete, and restore (RESTORE_CONFIRM=I_UNDERSTAND)
 	scripts/restore-demo.sh
+
+verify-restore-isolated: ## Prove backup recovery in a temporary database without changing live notes
+	scripts/verify-restore-isolated.sh
 
 verify-security: ## Check public port reachability and print project security-group ingress
 	scripts/verify-security.sh

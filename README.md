@@ -22,12 +22,13 @@ check for PostgreSQL from the application host, and then `app_stack`. The
 application stack is not deployed until that readiness check succeeds.
 
 Static validation and an isolated local PostgreSQL restore test pass. An
-explicit restore playbook and deleted-note demo are available. The AWS operator
+explicit restore playbook, deleted-note demo, and safe temporary-database
+restore check are available. The AWS operator
 reported a successful deployment, a no-change second Terraform run, an Ansible
 rerun with `changed=0`, and working `/readyz` plus note create/list requests
 through Nginx. The rerun found a checksum-valid completed backup. Reboot and DB
-container recreation persistence, and a live deleted-note restore, remain to
-be demonstrated. End-to-end recovery is still pending.
+container recreation persistence and an AWS restore check remain to be
+demonstrated. End-to-end recovery is still pending.
 
 ### Prerequisites
 
@@ -124,9 +125,11 @@ be demonstrated. End-to-end recovery is still pending.
    were removed; do not assume cleanup succeeded just because the command
    returned.
 
-For an explicit backup and a measured deleted-note recovery demonstration,
-see [docs/backups.md](docs/backups.md). Restoring rewinds the whole database;
-run the demo only after coordinating with the deployment operator.
+For a backup recovery check that leaves the live notes unchanged, use
+`make verify-restore-isolated` from the deployment operator's checkout. For
+whole-database recovery instructions, see [docs/backups.md](docs/backups.md).
+Restoring the live database rewinds all notes; run the disruptive demo only
+after coordinating with the deployment operator.
 
 ## Why the application image is pinned by digest
 
