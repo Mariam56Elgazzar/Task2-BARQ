@@ -1,9 +1,9 @@
 # AWS architecture
 
-The diagram documents the configured network and app stack. The PostgreSQL
-container is the planned DB-host service: the DB and backup plays are still
-placeholders in `ansible/playbooks/site.yml`, so that part is not yet deployed
-by the active playbook.
+The diagram documents the configured network, dedicated database EBS volume,
+and app stack. PostgreSQL and `db_backup` are implemented and integrated into
+`ansible/playbooks/site.yml`. The application stack runs only after the app host
+successfully checks the PostgreSQL private listener.
 
 ```mermaid
 flowchart TB
@@ -25,9 +25,10 @@ flowchart TB
         Nginx["Nginx container<br/>port 80"]
         App["Notes API container<br/>port 8000"]
     end
-    subgraph DBDocker["Docker host on DB EC2<br/>planned service"]
-        Postgres["PostgreSQL container<br/>port 5432<br/>TODO(person-b): role and storage"]
+    subgraph DBDocker["Docker host on DB EC2"]
+        Postgres["PostgreSQL container<br/>port 5432"]
     end
+    DataVolume[("Encrypted EBS data volume<br/>mounted at /srv/pgdata")]
 
     Internet --> IGW
     IGW -->|"public HTTP TCP 80"| AppEC2
@@ -40,6 +41,7 @@ flowchart TB
     Nginx -->|"Docker network proxy to app:8000"| App
     App -->|"DB_HOST = DB private IP 10.20.1.20<br/>TCP 5432 via App SG rule"| Postgres
     DBEC2 -. "hosts" .- Postgres
+    DataVolume -->|"PostgreSQL data"| Postgres
 ```
 
 Terraform configures the VPC, public subnet, internet gateway and default
@@ -55,12 +57,14 @@ receives `DB_HOST` from `/opt/stacks/app/.env`; its intended DB endpoint is
 the database host's private IP. The DB environment file path is
 `/opt/stacks/db/.env`.
 
-**Current implementation boundary:** Terraform creates both EC2 instances and
-their network rules. The active playbook installs Docker, renders protected
-environment files, and deploys the app stack. The PostgreSQL and backup role
-plays are currently commented placeholders. EBS mounting, backup/restore, and
-reboot recovery are therefore not represented as completed behavior here.
+Terraform provisions an encrypted EBS data volume, attaches it to the DB
+instance, and exposes its ID to Ansible inventory. The `postgres` role
+identifies the attached device, mounts it at `/srv/pgdata`, and deploys
+PostgreSQL; `db_backup` runs after that role. The playbook then waits for
+PostgreSQL from the app host before running `app_stack`.
 
-**TODO(person-b):** replace the planned PostgreSQL, EBS, backup/restore, and
-reboot details with verified role behavior and evidence when those roles are
-integrated.
+Local tests and static validation pass. No real AWS deployment, EBS mount test,
+reboot persistence test, or backup execution on AWS has been performed. No
+restore demonstration has been completed, and end-to-end recovery remains
+pending. The implemented configuration is not evidence that these AWS
+behaviors have been verified.

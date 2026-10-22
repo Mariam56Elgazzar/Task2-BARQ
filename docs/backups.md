@@ -1,6 +1,7 @@
 # PostgreSQL backups
 
-The `db_backup` role runs after PostgreSQL is healthy. On the first deployment
+The `db_backup` role is integrated into `ansible/playbooks/site.yml` and runs
+after the `postgres` role on the database host. On the first deployment
 it creates one backup if no completed, checksum-valid archive exists. It then
 enables `notes-pg-backup.timer` for **02:30 UTC daily**. The timer has
 `Persistent=true`, so a missed run is started after the host comes back.
@@ -46,9 +47,6 @@ database container are healthy, and the protected database environment exists.
 Read the service journal for the failing command. Partial files are removed on
 failure; older completed backups remain. A successful `pg_restore --list`
 and checksum show the archive is readable and unchanged, but **only a real
-restore of deleted data proves recovery**. That restore demonstration is a
-separate step and has not yet been run on AWS.
-
-The backup role is not yet added to normal `site.yml`: its PostgreSQL
-dependency is under review. Once that role merges, add `db_backup` after
-`postgres` in the DB play and verify the timer on the actual host.
+restore of deleted data proves recovery**. No real backup execution on AWS or
+restore demonstration has been performed. End-to-end recovery remains pending;
+local tests and static validation do not prove AWS backup or restore behavior.

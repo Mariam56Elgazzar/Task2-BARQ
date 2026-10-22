@@ -15,10 +15,17 @@ tests, see [app/README.md](app/README.md).
 - [Daily PostgreSQL backups and checks](docs/backups.md)
 - [Image release workflow, registry access, and troubleshooting](docs/image-release.md)
 
-**Deployment status:** The PostgreSQL and guarded backup roles are implemented
-and ordered before the application stack. AWS deployment, live mount behavior,
-backup execution, restore verification, reboot persistence, and end-to-end
-recovery testing still require environment validation.
+**Deployment status:** The PostgreSQL deployment and guarded backup roles are
+integrated into the normal deployment playbook. The deployment order is
+`postgres`, then `db_backup` on the database host, followed by a TCP readiness
+check for PostgreSQL from the application host, and then `app_stack`. The
+application stack is not deployed until that readiness check succeeds.
+
+The local tests and static validation pass. No real AWS deployment or EBS mount
+test has been performed; reboot persistence has not been tested; no real backup
+has been executed on AWS; and no restore demonstration has been completed.
+End-to-end recovery remains pending. Do not treat any of these AWS behaviors
+as proven by local checks.
 
 ### Prerequisites
 
@@ -66,17 +73,20 @@ recovery testing still require environment validation.
    `ansible/roles/app_stack/defaults/main.yml` to the matching
    `ghcr.io/<owner>/<image>@sha256:<digest>` reference. Do not substitute a
    tag or guess a digest.
-5. Confirm that the `postgres` role is implemented and that its play is enabled
-   in `ansible/playbooks/site.yml`. The playbook currently has that database
-   play and the `db_backup` play commented out; provisioning must not be
-   represented as complete until those required roles are ready.
-6. Review the Terraform plan and expected costs:
+5. Review the Terraform configuration and expected costs without applying it.
+   On a clean clone, initialize, validate, and plan in this order:
 
    ```bash
+   terraform -chdir=terraform init
+   terraform -chdir=terraform validate
    terraform -chdir=terraform plan
    ```
 
-   If the plan is expected, provision and configure:
+   The active Ansible playbook installs Docker, renders protected environment
+   files, deploys PostgreSQL and its backup timer, waits for PostgreSQL from
+   the app host, and only then deploys the application stack. The PostgreSQL
+   role mounts the dedicated EBS data volume.
+6. To provision and configure after reviewing the plan:
 
    ```bash
    make up
@@ -99,7 +109,7 @@ recovery testing still require environment validation.
    `verify-app` writes a uniquely named temporary note through the API and
    attempts to delete it. `verify-idempotency` requires an unchanged Terraform
    plan and asks before it runs Ansible. These checks have not been run against
-   AWS by this documentation change.
+   AWS.
 8. When finished, remove the deployment:
 
    ```bash
@@ -146,25 +156,17 @@ diagnostic output:
   The security groups restrict app ingress to HTTP and admin SSH, and DB
   ingress to PostgreSQL from the app security group plus admin SSH. Verify the
   deployed rules rather than relying only on this description.
-- The DB deployment, EBS data mounting, reboot recovery, and backup/restore
-  implementation are not complete in the current active Ansible playbook.
+- PostgreSQL and `db_backup` are integrated into the active playbook, and
+  Terraform provisions and attaches a dedicated EBS data volume. No real AWS
+  deployment, EBS mount test, reboot persistence test, or backup execution on
+  AWS has been performed. No restore demonstration is complete, and end-to-end
+  recovery remains pending.
 - Ansible Vault protects credentials at rest in the repository; the generated
   host `.env` files are root-owned and mode `0600`. The API container needs
   those credentials to connect to PostgreSQL.
 - `make up` uses Terraform apply and can incur AWS charges. `make down` destroys
   managed resources; it must not be used as a substitute for an independently
   reviewed cleanup plan.
-
-## Person B — pending documentation
-
-- **TODO(person-b): Backup/restore:** document the implemented backup schedule,
-  retention, restore procedure, and tested evidence.
-- **TODO(person-b): Reboot recovery:** document the verified recovery behavior
-  and test procedure.
-- **TODO(person-b): EBS mounting:** document the implemented data volume,
-  filesystem/mount configuration, and persistence checks.
-- **TODO(person-b): Reused-code note:** identify any reused code and document
-  its source and applicable license.
 
 ## Other project guides
 
@@ -176,4 +178,3 @@ diagnostic output:
 - [PostgreSQL backups, schedule, verification, and restore](docs/backups.md)
 - [Application contract and security expectations](docs/contract.md)
 - [Image release workflow and registry access](docs/image-release.md)
-

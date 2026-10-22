@@ -1,7 +1,8 @@
 # Interface contract (Person A <-> Person B)
 
-This contract distinguishes active code from the database and backup work that
-is still pending.
+This contract describes the active application, database, and backup
+integration, and distinguishes implemented configuration from AWS validation
+that is still pending.
 
 | Item | Current code / agreed contract |
 |---|---|
@@ -16,21 +17,23 @@ is still pending.
 | DB environment | `/opt/stacks/db/.env`; values are rendered by `deployment_secrets` |
 | App stack | `app_stack_image` must be `ghcr.io/<owner>/<image>@sha256:<digest>`; Compose uses Nginx on host port 80 and the app on internal port 8000 |
 | API endpoints | `/healthz`, `/readyz`, `/api/notes`, `/api/notes/{note_id}` |
-| Active playbook roles | `docker`, then `deployment_secrets`, then `app_stack`; `deployment_secrets` runs before `app_stack` |
-| Planned Person B roles | `postgres`, then `db_backup` on `db`, before `app_stack`; both plays remain commented out in `ansible/playbooks/site.yml` |
+| Active playbook order | `docker`, `deployment_secrets`, `postgres`, `db_backup`, PostgreSQL TCP readiness check from `app`, then `app_stack` |
 
 The Terraform-generated inventory template is
 `terraform/templates/inventory.yml.tftpl`. The `db_host` alias is declared in
 `ansible/inventory/group_vars/all/main.yml`; the app Compose template and
-`app_stack` wait task both use `db_host`.
+`app_stack` use `db_host`. Terraform provisions and attaches the dedicated
+encrypted EBS data volume, and passes its ID through the generated inventory
+for the `postgres` role.
 
-**TODO(person-b):** confirm whether the final database role is named `postgres`
-and backup role `db_backup`, or update the commented plays and this contract to
-the agreed names before enabling them.
+The database and backup roles are integrated in `ansible/playbooks/site.yml`.
+The app stack runs only after the app host's PostgreSQL readiness check
+succeeds. Local tests and static validation pass.
 
-**TODO(person-b):** define and verify who initializes the schema and grants
-`notes_app` permissions. The repository contains the schema and SQL behavior
-for the API, but the database deployment role is not yet active.
+No real AWS deployment, EBS mount test, reboot persistence test, or backup
+execution on AWS has been performed. No restore demonstration has been
+completed, and end-to-end recovery remains pending. These are outstanding
+environment validation, not missing role integrations.
 
 See [docs/deployment-secrets.md](deployment-secrets.md) for Vault handling and
 protected environment-file requirements.
