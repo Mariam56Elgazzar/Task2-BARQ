@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Restore a real backup into a disposable database; never restore over notes.
+set -Eeuo pipefail
+umask 077
+
+backup_dir="{{ isolated_backup_dir }}"
+stack_dir="{{ isolated_stack_path }}"
+mount_path="{{ isolated_mount_path }}"
+docker_bin="{{ isolated_docker_bin }}"
+
+if [[ $# -ne 1 || ! "$1" =~ ^notes-[0-9]{8}T[0-9]{15}Z\.dump$ ]]; then
+  echo 'Pass one completed notes-YYYYMMDDTHHMMSSNNNNNNNNNZ.dump basename.' >&2
+  exit 2
+fi
+
+name=$1
+archive="$backup_dir/$name"
+checksum="$archive.sha256"
+if ! mountpoint --quiet "$mount_path"; then
+  echo 'PostgreSQL data mount is missing; isolated check cancelled.' >&2
+  exit 1
+fi
+if [[ ! -d "$backup_dir" || ! -f "$stack_dir/.env" ||
+      ! -f "$archive" || ! -f "$checksum" ||
+      -L "$archive" || -L "$checksum" ]]; then
+  echo 'Selected backup, checksum, or database environment is missing.' >&2
+  exit 1
+fi
+
+# Prevent the backup timer from pruning the selected archive during this check.
+exec 9>"$backup_dir/.backup.lock"
+if ! flock --nonblock 9; then
+  echo 'A PostgreSQL backup or restore is already running.' >&2
+  exit 1
+fi
+(cd "$backup_dir" && sha256sum --check --status "$name.sha256") || {
+  echo 'Selected backup checksum failed.' >&2
+  exit 1
+}
+
+compose() {
+  "$docker_bin" compose -f "$stack_dir/docker-compose.yml" \
+    --project-directory "$stack_dir" exec -T db "$@"
+}
+pg() {
+  compose sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; client="$1"; shift; exec "$client" --username="$POSTGRES_USER" --no-password "$@"' sh "$@"
+}
+
+compose pg_restore --list < "$archive" > /dev/null
+stamp=$(date -u +%Y%m%d%H%M%S)
+temp_db="notes_restore_check_${stamp}_$$"
+marker="restore_check_${stamp}_$$"
+[[ "$temp_db" =~ ^notes_restore_check_[0-9]{14}_[0-9]+$ ]] || exit 1
+scratch=$(mktemp "$backup_dir/.restore-check-XXXXXXXX.dump")
+temp_created=0
+
+cleanup() {
+  result=$?
+  trap - EXIT
+  if [[ "$temp_created" == 1 ]]; then
+    if ! pg dropdb --maintenance-db=postgres --if-exists --force "$temp_db" > /dev/null; then
+      printf 'Could not remove temporary database %s; inspect it manually.\n' "$temp_db" >&2
+      result=1
+    fi
+  fi
+  rm -f -- "$scratch" || result=1
+  exit "$result"
+}
+trap cleanup EXIT
+
+pg createdb --maintenance-db=postgres "$temp_db"
+temp_created=1
+pg pg_restore --dbname="$temp_db" --clean --if-exists --single-transaction --exit-on-error \
+  --no-owner --no-acl < "$archive"
+
+# The marker and all following writes are confined to the temporary database.
+pg psql --dbname="$temp_db" -X -qAt -v ON_ERROR_STOP=1 \
+  -c "INSERT INTO public.notes (title, content) VALUES ('$marker', 'Temporary isolated restore marker')" > /dev/null
+marker_id=$(pg psql --dbname="$temp_db" -X -qAt -v ON_ERROR_STOP=1 \
+  -c "SELECT id FROM public.notes WHERE title = '$marker' AND content = 'Temporary isolated restore marker'")
+[[ "$marker_id" =~ ^[1-9][0-9]*$ ]] || {
+  echo 'Temporary marker was not created exactly once.' >&2
+  exit 1
+}
+
+pg pg_dump --dbname="$temp_db" --format=custom --no-owner --no-acl > "$scratch"
+test -s "$scratch"
+compose pg_restore --list < "$scratch" > /dev/null
+pg psql --dbname="$temp_db" -X -qAt -v ON_ERROR_STOP=1 \
+  -c "DELETE FROM public.notes WHERE id = $marker_id AND title = '$marker'" > /dev/null
+missing=$(pg psql --dbname="$temp_db" -X -qAt -v ON_ERROR_STOP=1 \
+  -c "SELECT count(*) FROM public.notes WHERE id = $marker_id")
+[[ "$missing" == 0 ]] || {
+  echo 'Temporary marker was not deleted.' >&2
+  exit 1
+}
+
+pg pg_restore --dbname="$temp_db" --clean --if-exists --single-transaction \
+  --exit-on-error --no-owner --no-acl < "$scratch"
+restored_id=$(pg psql --dbname="$temp_db" -X -qAt -v ON_ERROR_STOP=1 \
+  -c "SELECT id FROM public.notes WHERE id = $marker_id AND title = '$marker' AND content = 'Temporary isolated restore marker'")
+[[ "$restored_id" == "$marker_id" ]] || {
+  echo 'Temporary marker did not return from the backup.' >&2
+  exit 1
+}
+
+pg dropdb --maintenance-db=postgres --if-exists --force "$temp_db" > /dev/null
+temp_created=0
+rm -- "$scratch"
+trap - EXIT
+printf 'RESTORE_CHECK=PASS archive=%s marker_id=%s\n' "$name" "$marker_id"

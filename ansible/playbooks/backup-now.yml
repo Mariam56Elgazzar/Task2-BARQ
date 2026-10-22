@@ -6,4 +6,18 @@
     - name: Create and verify a backup archive
       ansible.builtin.command:
         argv: [/usr/local/sbin/notes-pg-backup]
+      register: backup_now
       no_log: true
+
+    - name: Extract the safe archive name for an explicit restore
+      ansible.builtin.set_fact:
+        backup_archive_name: "{{ backup_now.stdout | regex_search('notes-[0-9]{8}T[0-9]{15}Z\\.dump') }}"
+
+    - name: Require a recognized completed archive name
+      ansible.builtin.assert:
+        that: backup_archive_name is match('^notes-[0-9]{8}T[0-9]{15}Z\\.dump$')
+        fail_msg: Backup finished without a recognized archive name; inspect the DB host before restoring.
+
+    - name: Report the archive name without exposing credentials
+      ansible.builtin.debug:
+        msg: "BACKUP_ARCHIVE={{ backup_archive_name }}"

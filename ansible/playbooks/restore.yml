@@ -1,0 +1,154 @@
+---
+# Deliberately separate from site.yml. Restores the whole notes database.
+- name: Restore a selected PostgreSQL backup and recover the application
+  hosts: db
+  become: true
+  gather_facts: false
+  vars:
+    restore_backup_dir: /var/backups/postgres
+    restore_stack_path: /opt/stacks/db
+    restore_mount_path: /srv/pgdata
+    restore_docker_bin: /usr/bin/docker
+    restore_script: /usr/local/sbin/notes-pg-restore
+    restore_app_stack: /opt/stacks/app
+    restore_socket_path: /opt/stacks/db/run
+  tasks:
+    - name: Require one explicitly selected archive and one application host
+      ansible.builtin.assert:
+        that:
+          - restore_backup_file | default('') is match('^notes-[0-9]{8}T[0-9]{15}Z\\.dump$')
+          - groups['app'] | default([]) | length == 1
+        fail_msg: Pass -e restore_backup_file=notes-YYYYMMDDTHHMMSSNNNNNNNNNZ.dump and use one app host.
+
+    - name: Install the protected restore helper
+      ansible.builtin.template:
+        src: templates/notes-pg-restore.j2
+        dest: "{{ restore_script }}"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Verify the archive and checksum before stopping the application
+      ansible.builtin.command:
+        argv: ["{{ restore_script }}", --verify, "{{ restore_backup_file }}"]
+      changed_when: false
+
+    - name: Check the application Compose project before beginning the restore
+      ansible.builtin.stat:
+        path: "{{ restore_app_stack }}/docker-compose.yml"
+      register: restore_app_project
+      delegate_to: "{{ groups['app'][0] }}"
+
+    - name: Require the application Compose project before stopping writes
+      ansible.builtin.assert:
+        that: restore_app_project.stat.isreg | default(false)
+        fail_msg: Deploy the application stack before restoring its database.
+
+    - name: Stop writes, restore, repair grants, and recover the app
+      block:
+        - name: Stop the app and Nginx without removing their containers
+          community.docker.docker_compose_v2:
+            project_src: "{{ restore_app_stack }}"
+            state: stopped
+          delegate_to: "{{ groups['app'][0] }}"
+
+        - name: Restore the selected archive in one PostgreSQL transaction
+          ansible.builtin.command:
+            argv: ["{{ restore_script }}", --restore, "{{ restore_backup_file }}"]
+
+        - name: Keep default users out of the restored public schema
+          community.postgresql.postgresql_privs:
+            login_db: "{{ db_name }}"
+            login_user: postgres
+            login_password: "{{ vault_pg_admin_password }}"
+            login_unix_socket: "{{ restore_socket_path }}"
+            type: schema
+            objs: public
+            roles: PUBLIC
+            privs: ALL
+            state: absent
+          no_log: true
+          diff: false
+
+        - name: Give the app schema usage again
+          community.postgresql.postgresql_privs:
+            login_db: "{{ db_name }}"
+            login_user: postgres
+            login_password: "{{ vault_pg_admin_password }}"
+            login_unix_socket: "{{ restore_socket_path }}"
+            type: schema
+            objs: public
+            roles: "{{ db_app_user }}"
+            privs: USAGE
+            state: present
+          no_log: true
+          diff: false
+
+        - name: Give the app access to the restored table
+          community.postgresql.postgresql_privs:
+            login_db: "{{ db_name }}"
+            login_user: postgres
+            login_password: "{{ vault_pg_admin_password }}"
+            login_unix_socket: "{{ restore_socket_path }}"
+            type: table
+            schema: public
+            objs: notes
+            roles: "{{ db_app_user }}"
+            privs: SELECT,INSERT,UPDATE,DELETE
+            state: present
+          no_log: true
+          diff: false
+
+        - name: Let the app generate identifiers after restoration
+          community.postgresql.postgresql_privs:
+            login_db: "{{ db_name }}"
+            login_user: postgres
+            login_password: "{{ vault_pg_admin_password }}"
+            login_unix_socket: "{{ restore_socket_path }}"
+            type: sequence
+            schema: public
+            objs: notes_id_seq
+            roles: "{{ db_app_user }}"
+            privs: USAGE
+            state: present
+          no_log: true
+          diff: false
+
+        - name: Confirm the restricted app account can read the restored table
+          community.postgresql.postgresql_query:
+            login_db: "{{ db_name }}"
+            login_user: "{{ db_app_user }}"
+            login_password: "{{ vault_pg_app_password }}"
+            login_unix_socket: "{{ restore_socket_path }}"
+            query: SELECT id FROM public.notes LIMIT 0
+          changed_when: false
+          no_log: true
+          diff: false
+
+        - name: Start the app and Nginx
+          community.docker.docker_compose_v2:
+            project_src: "{{ restore_app_stack }}"
+            state: present
+          delegate_to: "{{ groups['app'][0] }}"
+
+        - name: Wait for authenticated readiness through Nginx
+          ansible.builtin.uri:
+            url: http://127.0.0.1/readyz
+            status_code: 200
+          register: restore_readiness
+          until: restore_readiness.status == 200
+          retries: 12
+          delay: 5
+          delegate_to: "{{ groups['app'][0] }}"
+          changed_when: false
+      rescue:
+        - name: Attempt to bring the app back after a restore failure
+          community.docker.docker_compose_v2:
+            project_src: "{{ restore_app_stack }}"
+            state: present
+          delegate_to: "{{ groups['app'][0] }}"
+          ignore_errors: true
+
+        - name: Report the failed restore without claiming recovery
+          ansible.builtin.fail:
+            msg: Restore or recovery failed. Inspect the failed task and /readyz; the source archive was not changed.

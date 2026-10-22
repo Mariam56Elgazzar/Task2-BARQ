@@ -12,7 +12,7 @@ tests, see [app/README.md](app/README.md).
 - [API endpoints, configuration, schema, and tests](app/README.md)
 - [Deployment credentials and protected environment files](docs/deployment-secrets.md)
 - [PostgreSQL storage, deployment, and checks](docs/postgres-deployment.md)
-- [Daily PostgreSQL backups and checks](docs/backups.md)
+- [Daily PostgreSQL backups and explicit restoration](docs/backups.md)
 - [Image release workflow, registry access, and troubleshooting](docs/image-release.md)
 
 **Deployment status:** The PostgreSQL deployment and guarded backup roles are
@@ -21,11 +21,14 @@ integrated into the normal deployment playbook. The deployment order is
 check for PostgreSQL from the application host, and then `app_stack`. The
 application stack is not deployed until that readiness check succeeds.
 
-The local tests and static validation pass. No real AWS deployment or EBS mount
-test has been performed; reboot persistence has not been tested; no real backup
-has been executed on AWS; and no restore demonstration has been completed.
-End-to-end recovery remains pending. Do not treat any of these AWS behaviors
-as proven by local checks.
+Static validation and an isolated local PostgreSQL restore test pass. An
+explicit restore playbook, deleted-note demo, and safe temporary-database
+restore check are available. The AWS operator
+reported a successful deployment, a no-change second Terraform run, an Ansible
+rerun with `changed=0`, and working `/readyz` plus note create/list requests
+through Nginx. The rerun found a checksum-valid completed backup. Reboot and DB
+container recreation persistence and an AWS restore check remain to be
+demonstrated. End-to-end recovery is still pending.
 
 ### Prerequisites
 
@@ -108,8 +111,10 @@ as proven by local checks.
 
    `verify-app` writes a uniquely named temporary note through the API and
    attempts to delete it. `verify-idempotency` requires an unchanged Terraform
-   plan and asks before it runs Ansible. These checks have not been run against
-   AWS.
+   plan and asks before it runs Ansible. The AWS operator reported that
+   `verify-app` and `verify-security` passed, and a second `make up` showed no
+   Terraform changes and Ansible `changed=0`. Repeat the checks after a fresh
+   deployment.
 8. When finished, remove the deployment:
 
    ```bash
@@ -119,6 +124,12 @@ as proven by local checks.
    This runs `terraform destroy`. Confirm in AWS that the project resources
    were removed; do not assume cleanup succeeded just because the command
    returned.
+
+For a backup recovery check that leaves the live notes unchanged, use
+`make verify-restore-isolated` from the deployment operator's checkout. For
+whole-database recovery instructions, see [docs/backups.md](docs/backups.md).
+Restoring the live database rewinds all notes; run the disruptive demo only
+after coordinating with the deployment operator.
 
 ## Why the application image is pinned by digest
 
@@ -157,10 +168,9 @@ diagnostic output:
   ingress to PostgreSQL from the app security group plus admin SSH. Verify the
   deployed rules rather than relying only on this description.
 - PostgreSQL and `db_backup` are integrated into the active playbook, and
-  Terraform provisions and attaches a dedicated EBS data volume. No real AWS
-  deployment, EBS mount test, reboot persistence test, or backup execution on
-  AWS has been performed. No restore demonstration is complete, and end-to-end
-  recovery remains pending.
+  Terraform provisions and attaches a dedicated EBS data volume. The AWS
+  operator reported successful deployment and a clean rerun. Reboot and DB
+  container recreation persistence, and a live restore, remain unverified.
 - Ansible Vault protects credentials at rest in the repository; the generated
   host `.env` files are root-owned and mode `0600`. The API container needs
   those credentials to connect to PostgreSQL.

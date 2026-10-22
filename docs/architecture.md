@@ -63,8 +63,7 @@ identifies the attached device, mounts it at `/srv/pgdata`, and deploys
 PostgreSQL; `db_backup` runs after that role. The playbook then waits for
 PostgreSQL from the app host before running `app_stack`.
 
-Local tests and static validation pass. No real AWS deployment, EBS mount test,
-reboot persistence test, or backup execution on AWS has been performed. No
-restore demonstration has been completed, and end-to-end recovery remains
-pending. The implemented configuration is not evidence that these AWS
-behaviors have been verified.
+Local tests and static validation pass. The AWS operator reported successful
+EBS-backed deployment, application checks, and a clean rerun. Reboot and DB
+container recreation persistence, and a live deleted-note restore, remain
+unverified. End-to-end recovery is still pending.

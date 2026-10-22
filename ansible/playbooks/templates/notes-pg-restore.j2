@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Explicit recovery only. Installed by restore.yml, never called by site.yml.
+set -Eeuo pipefail
+umask 077
+
+backup_dir="{{ restore_backup_dir }}"
+stack_dir="{{ restore_stack_path }}"
+mount_path="{{ restore_mount_path }}"
+docker_bin="{{ restore_docker_bin }}"
+
+if [[ $# -ne 2 || ( "$1" != --verify && "$1" != --restore ) ||
+      ! "$2" =~ ^notes-[0-9]{8}T[0-9]{15}Z\.dump$ ]]; then
+  echo 'Usage: notes-pg-restore --verify|--restore notes-YYYYMMDDTHHMMSSNNNNNNNNNZ.dump' >&2
+  exit 2
+fi
+
+mode=$1
+name=$2
+archive="$backup_dir/$name"
+checksum="$archive.sha256"
+
+if ! mountpoint --quiet "$mount_path"; then
+  echo 'PostgreSQL data mount is missing; restore cancelled.' >&2
+  exit 1
+fi
+if [[ ! -d "$backup_dir" || ! -f "$stack_dir/.env" ||
+      ! -f "$archive" || ! -f "$checksum" ||
+      -L "$archive" || -L "$checksum" ]]; then
+  echo 'The selected backup, checksum, or protected database environment is missing.' >&2
+  exit 1
+fi
+
+# Share the backup job's lock: a timer cannot prune this archive during restore.
+exec 9>"$backup_dir/.backup.lock"
+if ! flock --nonblock 9; then
+  echo 'A PostgreSQL backup or restore is already running.' >&2
+  exit 1
+fi
+
+(cd "$backup_dir" && sha256sum --check --status "$name.sha256") || {
+  echo 'Selected backup checksum failed.' >&2
+  exit 1
+}
+"$docker_bin" compose -f "$stack_dir/docker-compose.yml" --project-directory "$stack_dir" \
+  exec -T db pg_restore --list < "$archive" > /dev/null || {
+  echo 'PostgreSQL cannot read the selected backup archive.' >&2
+  exit 1
+}
+
+if [[ "$mode" == --verify ]]; then
+  echo "Verified backup: $name"
+  exit 0
+fi
+
+# The dump was made with --no-owner --no-acl. Restore as postgres, then the
+# playbook reapplies the restricted application's grants before starting it.
+"$docker_bin" compose -f "$stack_dir/docker-compose.yml" --project-directory "$stack_dir" \
+  exec -T db sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec pg_restore --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --clean --if-exists --single-transaction --exit-on-error --no-owner --no-acl' \
+  < "$archive"
+echo "Restored backup: $name"
