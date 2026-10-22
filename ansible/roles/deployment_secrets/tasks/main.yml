@@ -1,0 +1,53 @@
+---
+- name: Check required database credentials
+  ansible.builtin.assert:
+    that:
+      - vault_pg_admin_password is defined
+      - vault_pg_app_password is defined
+      - vault_pg_admin_password | length >= 32
+      - vault_pg_app_password | length >= 32
+      - vault_pg_admin_password is match('^[A-Za-z0-9_-]+$')
+      - vault_pg_app_password is match('^[A-Za-z0-9_-]+$')
+      - vault_pg_admin_password != vault_pg_app_password
+    fail_msg: Database credentials must be distinct, at least 32 characters, and safe for Compose env files.
+  no_log: true
+
+- name: Create database stack directory
+  ansible.builtin.file:
+    path: "{{ deployment_stack_root }}/db"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  when: "'db' in group_names"
+
+- name: Render protected database environment
+  ansible.builtin.template:
+    src: db.env.j2
+    dest: "{{ deployment_stack_root }}/db/.env"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  diff: false
+  when: "'db' in group_names"
+
+- name: Create application stack directory
+  ansible.builtin.file:
+    path: "{{ deployment_stack_root }}/app"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+  when: "'app' in group_names"
+
+- name: Render protected application environment
+  ansible.builtin.template:
+    src: app.env.j2
+    dest: "{{ deployment_stack_root }}/app/.env"
+    owner: root
+    group: root
+    mode: '0600'
+  no_log: true
+  diff: false
+  when: "'app' in group_names"
