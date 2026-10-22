@@ -23,12 +23,8 @@ services:
     restart: "{{ app_stack_restart_policy }}"
     expose:
       - "{{ app_stack_internal_port }}"
-    environment:
-      DB_HOST: "{{ db_private_ip }}"
-      DB_PORT: "{{ db_port }}"
-      DB_NAME: "{{ db_name }}"
-      DB_USER: "{{ db_app_user }}"
-      DB_PASSWORD: "{{ vault_pg_app_password }}"
+    env_file:
+      - .env
     healthcheck:
       test:
         - CMD
