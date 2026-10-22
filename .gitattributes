@@ -1,0 +1,2 @@
+ansible/inventory/group_vars/all/vault.yml text eol=lf
+ansible/roles/deployment_secrets/templates/*.env.j2 text eol=lf
