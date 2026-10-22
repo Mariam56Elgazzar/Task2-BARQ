@@ -28,12 +28,10 @@ for the `postgres` role.
 
 The database and backup roles are integrated in `ansible/playbooks/site.yml`.
 The app stack runs only after the app host's PostgreSQL readiness check
-succeeds. Local tests and static validation pass.
-
-No real AWS deployment, EBS mount test, reboot persistence test, or backup
-execution on AWS has been performed. No restore demonstration has been
-completed, and end-to-end recovery remains pending. These are outstanding
-environment validation, not missing role integrations.
+succeeds. Local tests and static validation pass. The AWS operator reported a
+successful EBS-backed deployment and clean rerun. Reboot and DB container
+recreation persistence, and live restore proof, remain pending. These are
+outstanding environment checks, not missing role integrations.
 
 See [docs/deployment-secrets.md](deployment-secrets.md) for Vault handling and
 protected environment-file requirements.

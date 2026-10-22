@@ -47,10 +47,10 @@ after deployment. A second Ansible run should have zero unnecessary changes;
 then recreate the DB container and reboot both hosts while asserting the same
 record still exists.
 
-Local tests and static validation pass. No real AWS deployment, EBS mount test,
-or reboot persistence test has been performed. No real backup execution on AWS
-or restore demonstration has been completed; end-to-end recovery remains
-pending.
+Local tests and static validation pass. The AWS operator reported successful
+EBS-backed deployment and a clean Ansible rerun; that rerun found a completed,
+checksum-valid backup. Reboot and DB container recreation persistence, and a
+live restore demonstration, remain pending.
 
 ## Troubleshooting
 

@@ -57,9 +57,9 @@ database container are healthy, and the protected database environment exists.
 Read the service journal for the failing command. Partial files are removed on
 failure; older completed backups remain. A successful `pg_restore --list`
 and checksum show the archive is readable and unchanged, but **only a real
-restore of deleted data proves recovery**. No real backup execution on AWS or
-restore demonstration has been performed. End-to-end recovery remains pending;
-local tests and static validation do not prove AWS backup or restore behavior.
+restore of deleted data proves recovery**. The second AWS Ansible run found a
+completed, checksum-valid archive. A live deleted-note restore has not yet been
+demonstrated, so end-to-end recovery remains pending.
 
 ## Explicit recovery
 

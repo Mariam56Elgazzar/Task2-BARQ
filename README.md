@@ -22,12 +22,12 @@ check for PostgreSQL from the application host, and then `app_stack`. The
 application stack is not deployed until that readiness check succeeds.
 
 Static validation and an isolated local PostgreSQL restore test pass. An
-explicit restore playbook and deleted-note demo are available. No real AWS
-deployment or EBS mount test has been performed; reboot persistence has not
-been tested; no real backup has
-been executed on AWS; and no restore demonstration has been completed.
-End-to-end recovery remains pending. Do not treat any of these AWS behaviors
-as proven by local checks.
+explicit restore playbook and deleted-note demo are available. The AWS operator
+reported a successful deployment, a no-change second Terraform run, an Ansible
+rerun with `changed=0`, and working `/readyz` plus note create/list requests
+through Nginx. The rerun found a checksum-valid completed backup. Reboot and DB
+container recreation persistence, and a live deleted-note restore, remain to
+be demonstrated. End-to-end recovery is still pending.
 
 ### Prerequisites
 
@@ -163,10 +163,9 @@ diagnostic output:
   ingress to PostgreSQL from the app security group plus admin SSH. Verify the
   deployed rules rather than relying only on this description.
 - PostgreSQL and `db_backup` are integrated into the active playbook, and
-  Terraform provisions and attaches a dedicated EBS data volume. No real AWS
-  deployment, EBS mount test, reboot persistence test, or backup execution on
-  AWS has been performed. No restore demonstration is complete, and end-to-end
-  recovery remains pending.
+  Terraform provisions and attaches a dedicated EBS data volume. The AWS
+  operator reported successful deployment and a clean rerun. Reboot and DB
+  container recreation persistence, and a live restore, remain unverified.
 - Ansible Vault protects credentials at rest in the repository; the generated
   host `.env` files are root-owned and mode `0600`. The API container needs
   those credentials to connect to PostgreSQL.
