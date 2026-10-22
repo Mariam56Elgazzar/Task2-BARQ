@@ -10,7 +10,7 @@
 | Network | VPC `10.20.0.0/16`, subnet `10.20.1.0/24`, app `10.20.1.10`, db `10.20.1.20` |
 | Host paths | `/opt/stacks/app`, `/opt/stacks/db`, `/srv/pgdata` (data EBS), `/var/backups/postgres` |
 | App container | Listens on 8000; env `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` (from `db_app_user`), `DB_PASSWORD`; endpoints `/healthz`, `/readyz`, `/api/notes` |
-| Image names | App uses `app_image` as `ghcr.io/<owner>/<image>@sha256:<digest>`; Nginx and Postgres images use pinned tags |
+| Image names | App uses `app_stack_image` as `ghcr.io/<owner>/<image>@sha256:<digest>`; Nginx and Postgres images use pinned tags |
 
 ## Open questions for Person B (from review of PR #1)
 
