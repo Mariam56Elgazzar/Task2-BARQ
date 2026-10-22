@@ -64,7 +64,8 @@ container logs on the DB host. For a failed app connection, check the private
 listener, security group, `pg_hba.conf`, then the role and database grants.
 Do not print `.env`, decrypted Vault, or unredacted Compose configuration.
 
-The local Ansible checks validate syntax and disk identification logic. They
-do not prove AWS storage, network isolation, reboot behavior, or data
-persistence. The backup role is integrated and documented separately, but AWS
-backup execution, restore, and end-to-end recovery remain unverified.
+The local Ansible checks validate syntax and disk identification logic. The
+AWS operator additionally reported a successful volume mount, private database
+path, and clean rerun. A completed, checksum-valid backup was found on that
+rerun. Reboot behavior, DB container recreation persistence, and a live restore
+remain unverified; an archive alone does not prove recovery.

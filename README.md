@@ -110,8 +110,10 @@ be demonstrated. End-to-end recovery is still pending.
 
    `verify-app` writes a uniquely named temporary note through the API and
    attempts to delete it. `verify-idempotency` requires an unchanged Terraform
-   plan and asks before it runs Ansible. These checks have not been run against
-   AWS.
+   plan and asks before it runs Ansible. The AWS operator reported that
+   `verify-app` and `verify-security` passed, and a second `make up` showed no
+   Terraform changes and Ansible `changed=0`. Repeat the checks after a fresh
+   deployment.
 8. When finished, remove the deployment:
 
    ```bash
