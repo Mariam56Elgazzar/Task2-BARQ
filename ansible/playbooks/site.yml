@@ -18,13 +18,9 @@
 # - hosts: db
 #   become: true
 #   roles: [postgres, db_backup]
-#
-# - hosts: app
-#   become: true
-#   pre_tasks:
-#     - name: DB reachable over the VPC from the app host
-#       ansible.builtin.wait_for:
-#         host: "{{ db_private_ip }}"
-#         port: "{{ db_port }}"
-#         timeout: 120
-#   roles: [app_stack]
+
+- name: Deploy application stack
+  hosts: app
+  become: true
+  roles:
+    - app_stack
