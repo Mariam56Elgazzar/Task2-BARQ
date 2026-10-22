@@ -1,0 +1,68 @@
+---
+- name: Check backup paths and retention
+  ansible.builtin.assert:
+    that:
+      - backup_directory == '/var/backups/postgres'
+      - backup_stack_path == '/opt/stacks/db'
+      - backup_mount_path == '/srv/pgdata'
+      - backup_retention_days | int >= 1
+      - backup_retention_days | int <= 365
+    fail_msg: Backup paths or retention disagree with the deployment contract.
+
+- name: Protect the host backup directory
+  ansible.builtin.file:
+    path: "{{ backup_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Install the backup script
+  ansible.builtin.template:
+    src: notes-pg-backup.j2
+    dest: "{{ backup_script_path }}"
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Install the backup systemd service
+  ansible.builtin.template:
+    src: notes-pg-backup.service.j2
+    dest: /etc/systemd/system/notes-pg-backup.service
+    owner: root
+    group: root
+    mode: '0644'
+  register: backup_service_unit
+
+- name: Install the daily backup timer
+  ansible.builtin.template:
+    src: notes-pg-backup.timer.j2
+    dest: /etc/systemd/system/notes-pg-backup.timer
+    owner: root
+    group: root
+    mode: '0644'
+  register: backup_timer_unit
+
+- name: Reload systemd when backup units change
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: backup_service_unit.changed or backup_timer_unit.changed
+
+- name: Check whether a completed backup already exists
+  ansible.builtin.command:
+    argv: ["{{ backup_script_path }}", --has-complete]
+  register: backup_existing
+  changed_when: false
+  failed_when: backup_existing.rc not in [0, 1]
+
+- name: Take the first backup before declaring the timer ready
+  ansible.builtin.command:
+    argv: ["{{ backup_script_path }}"]
+  when: backup_existing.rc == 1
+  no_log: true
+
+- name: Enable the daily backup timer
+  ansible.builtin.systemd_service:
+    name: notes-pg-backup.timer
+    enabled: true
+    state: started

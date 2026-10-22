@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Managed by Ansible. Dump only after PostgreSQL is healthy on its data mount.
+set -Eeuo pipefail
+umask 077
+
+backup_dir="{{ backup_directory }}"
+stack_dir="{{ backup_stack_path }}"
+mount_path="{{ backup_mount_path }}"
+docker_bin="{{ backup_docker_bin }}"
+retention_days={{ backup_retention_days | int }}
+
+if [[ "${1:-}" == --has-complete ]]; then
+  shopt -s nullglob
+  for archive in "$backup_dir"/notes-*.dump; do
+    [[ -f "$archive.sha256" ]] || continue
+    if (cd "$backup_dir" && sha256sum --check --status "${archive##*/}.sha256"); then
+      exit 0
+    fi
+  done
+  exit 1
+fi
+if [[ $# -ne 0 ]]; then
+  echo 'Usage: notes-pg-backup [--has-complete]' >&2
+  exit 2
+fi
+
+if ! mountpoint --quiet "$mount_path"; then
+  echo 'PostgreSQL data mount is missing; backup cancelled.' >&2
+  exit 1
+fi
+if [[ ! -d "$backup_dir" || ! -f "$stack_dir/.env" ]]; then
+  echo 'Backup directory or protected database environment is missing.' >&2
+  exit 1
+fi
+
+exec 9>"$backup_dir/.backup.lock"
+if ! flock --nonblock 9; then
+  echo 'Another PostgreSQL backup is running.' >&2
+  exit 1
+fi
+
+stamp=$(date -u +%Y%m%dT%H%M%S%NZ)
+partial=$(mktemp "$backup_dir/.notes-$stamp.XXXXXX.partial")
+archive="$backup_dir/notes-$stamp.dump"
+checksum_partial="$backup_dir/.notes-$stamp.sha256.partial"
+checksum="$archive.sha256"
+
+cleanup() {
+  status=$?
+  trap - EXIT
+  rm -f -- "$partial" "$checksum_partial"
+  if [[ ! -f "$archive" ]]; then
+    rm -f -- "$checksum"
+  fi
+  return "$status"
+}
+trap cleanup EXIT
+
+if [[ -e "$archive" || -e "$checksum" ]]; then
+  echo 'Backup filename already exists; refusing to overwrite it.' >&2
+  exit 1
+fi
+
+"$docker_bin" compose -f "$stack_dir/docker-compose.yml" --project-directory "$stack_dir" \
+  exec -T db sh -c 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec pg_dump --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --format=custom --no-owner --no-acl' \
+  > "$partial"
+test -s "$partial"
+
+# The matching image's pg_restore checks that the archive catalog is readable.
+"$docker_bin" compose -f "$stack_dir/docker-compose.yml" --project-directory "$stack_dir" \
+  exec -T db pg_restore --list < "$partial" > /dev/null
+
+digest=$(sha256sum "$partial")
+digest=${digest%% *}
+printf '%s  %s\n' "$digest" "${archive##*/}" > "$checksum_partial"
+mv -- "$checksum_partial" "$checksum"
+mv -- "$partial" "$archive"
+
+# Retention runs only after a new verified archive is complete. Remove only
+# this project's matched archive/sidecar pairs, never arbitrary files.
+retention_minutes=$((retention_days * 1440))
+while IFS= read -r -d '' old_archive; do
+  [[ -f "$old_archive.sha256" ]] || continue
+  rm -- "$old_archive" "$old_archive.sha256"
+done < <(find "$backup_dir" -maxdepth 1 -type f -name 'notes-*.dump' \
+  -mmin "+$retention_minutes" -print0)
+
+echo "PostgreSQL backup complete: ${archive##*/}"
