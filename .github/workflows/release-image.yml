@@ -107,8 +107,15 @@ jobs:
           trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GH_USER" --password-stdin
           image="ghcr.io/${IMAGE_OWNER,,}/notes-api"
-          if docker manifest inspect "$image:$RELEASE_TAG" >/dev/null 2>&1; then
+          manifest_error="$RUNNER_TEMP/manifest-error.txt"
+          if docker manifest inspect "$image:$RELEASE_TAG" >/dev/null 2>"$manifest_error"; then
             echo 'This version already exists. Use a new version instead of overwriting it.'
+            exit 1
+          fi
+          # Only Docker's explicit missing-manifest response permits publication.
+          # Authentication, network, and unrecognized errors must stop the release.
+          if [[ "$(cat "$manifest_error")" != "no such manifest: $image:$RELEASE_TAG" ]]; then
+            echo 'Cannot confirm that this version is absent. Check registry access/connectivity and retry.'
             exit 1
           fi
           docker load --input notes-image.tar

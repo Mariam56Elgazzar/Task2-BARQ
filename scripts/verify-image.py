@@ -72,6 +72,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from psycopg.errors import InsufficientPrivilege
 from app.config import Settings
 from app.db import Database
 
@@ -99,6 +100,14 @@ with Database(Settings.from_env()).connect() as conn:
     assert not any(role[key] for key in ('rolsuper', 'rolcreatedb', 'rolcreaterole'))
     row = conn.execute('SELECT title, content FROM public.notes WHERE id = %s', (note['id'],)).fetchone()
     assert row == payload
+try:
+    with Database(Settings.from_env()).connect() as conn:
+        conn.execute('CREATE TABLE public.release_privilege_probe (id integer)')
+        conn.rollback()
+except InsufficientPrivilege:
+    pass
+else:
+    raise AssertionError('Application role unexpectedly allowed CREATE TABLE in public')
 assert request('/api/notes/' + str(note['id'])) == (200, note)
 status, updated = request('/api/notes/' + str(note['id']), 'PUT', {**payload, 'content': 'Updated'})
 assert status == 200 and updated['content'] == 'Updated'
@@ -109,7 +118,7 @@ except urllib.error.HTTPError as exc:
     assert exc.code == 404
 else:
     raise AssertionError('Deleted note still exists')
-print('PASS: packaged image UID, readiness, restricted DB login, committed CRUD, and build-secret absence')
+print('PASS: packaged image UID, readiness, restricted DB login, CREATE TABLE denial, committed CRUD, and build-secret absence')
 '''
         result = docker("exec", "--interactive", application, "python", "-", stdin=probe)
         print(result.stdout.strip())
