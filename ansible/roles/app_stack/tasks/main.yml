@@ -2,10 +2,10 @@
 - name: Validate the pinned application image reference
   ansible.builtin.assert:
     that:
-      - "'REPLACE_ME' not in app_image"
-      - app_image is match('^ghcr\.io/[^/]+/[^@]+@sha256:[0-9a-f]{64}$')
+      - "'REPLACE_ME' not in app_stack_image"
+      - app_stack_image is match('^ghcr\.io/[^/]+/[^@]+@sha256:[0-9a-f]{64}$')
     fail_msg: >-
-      Set app_image to the published GHCR image with its full sha256 digest
+      Set app_stack_image to the published GHCR image with its full sha256 digest
       before deploying; the placeholder value is not deployable.
 
 - name: Create application stack directory
@@ -53,8 +53,8 @@
     url: http://127.0.0.1/readyz
     method: GET
     status_code: 200
-  register: app_readiness
-  until: app_readiness.status == 200
-  retries: "{{ app_readiness_retries }}"
-  delay: "{{ app_readiness_delay }}"
+  register: app_stack_readiness
+  until: app_stack_readiness.status == 200
+  retries: "{{ app_stack_readiness_retries }}"
+  delay: "{{ app_stack_readiness_delay }}"
   changed_when: false
