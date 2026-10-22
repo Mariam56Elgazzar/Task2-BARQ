@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm@sha256:f06d01d4ba3f8ad5af45a3ec87df19c1d317d8e8961edc0fabda61811af6f7cf
+FROM python:3.11.17-slim-trixie@sha256:cce12316475d7d56d605f76e1d811d0dc4e7227f2d4afd29951521264f504ff8
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -15,6 +15,8 @@ RUN --mount=type=secret,id=build_ca \
         export PIP_CERT=/tmp/pip-ca.pem; \
     fi; \
     python -m pip install --no-cache-dir -r /tmp/requirements.txt; \
+    python -m pip uninstall --yes setuptools wheel; \
+    python -m pip check; \
     rm -f /tmp/pip-ca.pem
 
 RUN groupadd --gid 10001 appuser \
