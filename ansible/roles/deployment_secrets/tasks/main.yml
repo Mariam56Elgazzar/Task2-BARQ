@@ -14,7 +14,7 @@
 
 - name: Create database stack directory
   ansible.builtin.file:
-    path: "{{ deployment_stack_root }}/db"
+    path: "{{ deployment_secrets_stack_root }}/db"
     state: directory
     owner: root
     group: root
@@ -24,7 +24,7 @@
 - name: Render protected database environment
   ansible.builtin.template:
     src: db.env.j2
-    dest: "{{ deployment_stack_root }}/db/.env"
+    dest: "{{ deployment_secrets_stack_root }}/db/.env"
     owner: root
     group: root
     mode: '0600'
@@ -34,7 +34,7 @@
 
 - name: Create application stack directory
   ansible.builtin.file:
-    path: "{{ deployment_stack_root }}/app"
+    path: "{{ deployment_secrets_stack_root }}/app"
     state: directory
     owner: root
     group: root
@@ -44,7 +44,7 @@
 - name: Render protected application environment
   ansible.builtin.template:
     src: app.env.j2
-    dest: "{{ deployment_stack_root }}/app/.env"
+    dest: "{{ deployment_secrets_stack_root }}/app/.env"
     owner: root
     group: root
     mode: '0600'
