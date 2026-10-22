@@ -1,4 +1,4 @@
-.PHONY: help up down ssh-app ssh-db
+.PHONY: help up down ssh-app ssh-db verify-security verify-app verify-idempotency verify
 
 help: ## List targets
 	@grep -E "^[a-z-]+:.*##" $(MAKEFILE_LIST) | sed "s/:.*## /: /"
@@ -14,3 +14,14 @@ ssh-app: ## SSH to the app host
 
 ssh-db: ## SSH to the database host
 	ssh -o StrictHostKeyChecking=no -i $$(terraform -chdir=terraform output -raw ssh_private_key_path) $$(terraform -chdir=terraform output -raw ssh_user)@$$(terraform -chdir=terraform output -raw db_public_ip)
+
+verify-security: ## Check public port reachability and print project security-group ingress
+	scripts/verify-security.sh
+
+verify-app: ## Check readiness and notes API through Nginx
+	scripts/verify-app.sh
+
+verify-idempotency: ## Check Terraform plan and optionally run Ansible idempotency verification
+	scripts/verify-idempotency.sh
+
+verify: verify-security verify-app verify-idempotency ## Run all verification checks
