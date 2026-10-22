@@ -49,8 +49,9 @@ record still exists.
 
 Local tests and static validation pass. The AWS operator reported successful
 EBS-backed deployment and a clean Ansible rerun; that rerun found a completed,
-checksum-valid backup. Reboot and DB container recreation persistence, and a
-live restore demonstration, remain pending.
+checksum-valid backup. The operator also reported a passing isolated restore
+check on AWS. Reboot and DB container recreation persistence, and a restore
+over the live `notes` database, remain pending.
 
 ## Troubleshooting
 
@@ -67,5 +68,7 @@ Do not print `.env`, decrypted Vault, or unredacted Compose configuration.
 The local Ansible checks validate syntax and disk identification logic. The
 AWS operator additionally reported a successful volume mount, private database
 path, and clean rerun. A completed, checksum-valid backup was found on that
-rerun. Reboot behavior, DB container recreation persistence, and a live restore
-remain unverified; an archive alone does not prove recovery.
+rerun and a passing temporary-database restore check; its output was not supplied
+with this repository. Reboot behavior, DB container recreation persistence, and
+a restore over the live `notes` database remain unverified. An archive alone
+does not prove recovery.

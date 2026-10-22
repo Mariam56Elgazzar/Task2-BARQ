@@ -64,6 +64,7 @@ PostgreSQL; `db_backup` runs after that role. The playbook then waits for
 PostgreSQL from the app host before running `app_stack`.
 
 Local tests and static validation pass. The AWS operator reported successful
-EBS-backed deployment, application checks, and a clean rerun. Reboot and DB
-container recreation persistence, and a live deleted-note restore, remain
-unverified. End-to-end recovery is still pending.
+EBS-backed deployment, application checks, a clean rerun, and a passing
+temporary-database restore check. The operator's restore output was not supplied
+with this repository. Reboot and DB container recreation persistence, and a
+restore over the live `notes` database, remain unverified.

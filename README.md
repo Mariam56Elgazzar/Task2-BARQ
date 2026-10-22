@@ -23,12 +23,14 @@ application stack is not deployed until that readiness check succeeds.
 
 Static validation and an isolated local PostgreSQL restore test pass. An
 explicit restore playbook, deleted-note demo, and safe temporary-database
-restore check are available. The AWS operator
-reported a successful deployment, a no-change second Terraform run, an Ansible
-rerun with `changed=0`, and working `/readyz` plus note create/list requests
-through Nginx. The rerun found a checksum-valid completed backup. Reboot and DB
-container recreation persistence and an AWS restore check remain to be
-demonstrated. End-to-end recovery is still pending.
+restore check are available. The AWS operator reported a successful deployment,
+a no-change second Terraform run, an Ansible rerun with `changed=0`, and working
+`/readyz` plus note create/list requests through Nginx. The rerun found a
+checksum-valid completed backup. The operator also reported that
+`make verify-restore-isolated` passed on AWS; its output was not supplied with
+this repository. That check restores deleted test data in a temporary database,
+not over the live `notes` database. Reboot and DB container recreation
+persistence, and full live-database recovery, remain unverified.
 
 ### Prerequisites
 
@@ -169,8 +171,9 @@ diagnostic output:
   deployed rules rather than relying only on this description.
 - PostgreSQL and `db_backup` are integrated into the active playbook, and
   Terraform provisions and attaches a dedicated EBS data volume. The AWS
-  operator reported successful deployment and a clean rerun. Reboot and DB
-  container recreation persistence, and a live restore, remain unverified.
+  operator reported successful deployment, a clean rerun, and a passing
+  temporary-database restore check. Reboot and DB container recreation
+  persistence, and a restore over the live database, remain unverified.
 - Ansible Vault protects credentials at rest in the repository; the generated
   host `.env` files are root-owned and mode `0600`. The API container needs
   those credentials to connect to PostgreSQL.
