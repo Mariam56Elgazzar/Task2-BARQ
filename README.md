@@ -11,6 +11,7 @@ localhost:8080 -> Nginx:80 -> app:8000 -> PostgreSQL:5432
 - [Local container setup, verification, and troubleshooting](docs/local-development.md)
 - [API endpoints, configuration, schema, and tests](app/README.md)
 - [Deployment credentials and protected environment files](docs/deployment-secrets.md)
+- [PostgreSQL storage, deployment, and checks](docs/postgres-deployment.md)
 - [Image release workflow, registry access, and troubleshooting](docs/image-release.md)
 
 The local stack runs on one Docker host. AWS deployment uses separate application
